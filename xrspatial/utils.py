@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from math import ceil
+import warnings
 
 import datashader as ds
 import datashader.transfer_functions as tf
@@ -449,3 +450,152 @@ def color_values(agg, color_key, alpha=255):
     _converted_colors = {k: _convert_color(v) for k, v in color_key.items()}
     f = np.vectorize(lambda v: _converted_colors.get(v, 0))
     return tf.Image(f(agg.data))
+
+
+
+def _infer_coord_unit_type(coord: xr.DataArray, cellsize: float) -> str:
+    """
+    Heuristic to classify a spatial coordinate axis as:
+    - 'degrees'
+    - 'linear'   (meters/feet/etc)
+    - 'unknown'
+
+    Parameters
+    ----------
+    coord : xr.DataArray
+        1D coordinate variable (x or y).
+    cellsize : float
+        Mean spacing along this coordinate.
+
+    Returns
+    -------
+    str
+    """
+    units = str(coord.attrs.get("units", "")).lower()
+
+    # 1) Explicit units, if present
+    if "degree" in units or units in ("deg", "degrees"):
+        return "degrees"
+    if units in ("m", "meter", "metre", "meters", "metres",
+                 "km", "kilometer", "kilometre", "kilometers", "kilometres",
+                 "ft", "foot", "feet"):
+        return "linear"
+
+    # 2) Numeric heuristics (very conservative)
+    vals = coord.values
+    if vals.size < 2 or not np.issubdtype(vals.dtype, np.number):
+        return "unknown"
+
+    vmin = float(np.nanmin(vals))
+    vmax = float(np.nanmax(vals))
+    span = abs(vmax - vmin)
+    dx = abs(float(cellsize))
+
+    # Typical global geographic axes: span <= 360, spacing ~1e-5–0.5 deg
+    if -360.0 <= vmin <= 360.0 and -360.0 <= vmax <= 360.0:
+        if 1e-5 <= dx <= 0.5:
+            return "degrees"
+
+    # Typical projected axes in meters: span >> 1, spacing > ~0.1
+    # (e.g. UTM / national grids)
+    if span > 1000.0 and dx >= 0.1:
+        return "linear"
+
+    return "unknown"
+
+
+def _infer_vertical_unit_type(agg: xr.DataArray) -> str:
+    """
+    Heuristic to classify the DataArray values as:
+    - 'elevation'  (meters/feet etc)
+    - 'angle'      (degrees/radians)
+    - 'unknown'
+    """
+    units = str(agg.attrs.get("units", "")).lower()
+
+    # 1) Explicit units
+    if any(k in units for k in ("degree", "deg")):
+        return "angle"
+    if "rad" in units:
+        return "angle"
+    if units in ("m", "meter", "metre", "meters", "metres",
+                 "km", "kilometer", "kilometre", "kilometers", "kilometres",
+                 "ft", "foot", "feet"):
+        return "elevation"
+
+    # 2) Numeric heuristics on data range
+    data = agg.values
+    if not np.issubdtype(data.dtype, np.number):
+        return "unknown"
+
+    finite = np.isfinite(data)
+    if not np.any(finite):
+        return "unknown"
+
+    vmin = float(data[finite].min())
+    vmax = float(data[finite].max())
+    span = vmax - vmin
+
+    # Elevation-like: tens–thousands of units, typical DEM ranges.
+    if 10.0 <= span <= 20000.0 and vmin > -500.0:
+        return "elevation"
+
+    # Angle-like: often 0–360, -180–180, or small (-pi, pi)
+    if -360.0 <= vmin <= 360.0 and -360.0 <= vmax <= 360.0:
+        # If the span is not huge, treat as angle-ish
+        if span <= 720.0:
+            return "angle"
+
+    return "unknown"
+
+def warn_if_unit_mismatch(agg: xr.DataArray) -> None:
+    """
+    Heuristic check for horizontal vs vertical unit mismatch.
+
+    Intended to catch the common case of:
+    - coordinates in degrees (lon/lat)
+    - elevation values in meters/feet
+
+    Emits a UserWarning if a likely mismatch is detected.
+    """
+    try:
+        cellsize_x, cellsize_y = get_dataarray_resolution(agg)
+    except Exception:
+        # If we can't even get a resolution, we also can't say much
+        return
+
+    # pick "x" and "y" coords in a generic way:
+    #   - typically dims are ('y', 'x') or ('lat', 'lon')
+    #   - fall back to last two dims
+    if len(agg.dims) < 2:
+        return
+
+    dim_y, dim_x = agg.dims[-2], agg.dims[-1]
+    coord_x = agg.coords.get(dim_x, None)
+    coord_y = agg.coords.get(dim_y, None)
+
+    if coord_x is None or coord_y is None:
+        # Can't infer spatial types without coords
+        return
+
+    horiz_x = _infer_coord_unit_type(coord_x, cellsize_x)
+    horiz_y = _infer_coord_unit_type(coord_y, cellsize_y)
+    vert = _infer_vertical_unit_type(agg)
+
+    horiz_types = {horiz_x, horiz_y} - {"unknown"}
+
+    # Only act if we have some signal about horizontal AND vertical
+    if not horiz_types or vert == "unknown":
+        return
+
+    # If any axis looks like degrees and vertical looks like elevation,
+    # it's almost certainly "lat/lon degrees + meter elevations"
+    if "degrees" in horiz_types and vert == "elevation":
+        warnings.warn(
+            "xrspatial: input DataArray appears to have coordinates in degrees "
+            "but elevation values in a linear unit (e.g. meters/feet). "
+            "Slope/aspect operations expect horizontal distances in the same "
+            "units as vertical. Consider reprojecting to a projected CRS with "
+            "meter-based coordinates before calling `slope`.",
+            UserWarning,
+        )
