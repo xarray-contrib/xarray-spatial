@@ -21,7 +21,11 @@ import xarray as xr
 from numba import cuda
 
 # local modules
-from xrspatial.utils import (ArrayTypeFunctionMapping, cuda_args, get_dataarray_resolution, ngjit)
+from xrspatial.utils import ArrayTypeFunctionMapping
+from xrspatial.utils import cuda_args
+from xrspatial.utils import get_dataarray_resolution
+from xrspatial.utils import ngjit
+from xrspatial.utils import warn_if_unit_mismatch
 
 
 @ngjit
@@ -220,6 +224,7 @@ def curvature(agg: xr.DataArray,
         Attributes:
             res:      (10, 10)
     """
+    warn_if_unit_mismatch(agg)
 
     cellsize_x, cellsize_y = get_dataarray_resolution(agg)
     cellsize = (cellsize_x + cellsize_y) / 2
