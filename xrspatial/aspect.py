@@ -14,7 +14,10 @@ import numpy as np
 import xarray as xr
 from numba import cuda
 
-from xrspatial.utils import ArrayTypeFunctionMapping, cuda_args, ngjit
+from xrspatial.utils import ArrayTypeFunctionMapping
+from xrspatial.utils import cuda_args
+from xrspatial.utils import ngjit
+from xrspatial.utils import warn_if_unit_mismatch
 
 # 3rd-party
 try:
@@ -262,6 +265,9 @@ def aspect(agg: xr.DataArray,
               dtype=float32)
         Dimensions without coordinates: y, x
     """
+
+    warn_if_unit_mismatch(agg)
+
     mapper = ArrayTypeFunctionMapping(
         numpy_func=_run_numpy,
         dask_func=_run_dask_numpy,

@@ -32,7 +32,7 @@ def create_test_raster(
         backend='numpy',
         name='myraster',
         dims=['y', 'x'],
-        attrs={'res': (0.5, 0.5), 'crs': 'EPSG: 4326'},
+        attrs={'res': (0.5, 0.5), 'crs': 'EPSG: 5070'},
         chunks=(3, 3)
 ):
     raster = xr.DataArray(data, name=name, dims=dims, attrs=attrs)
@@ -42,12 +42,14 @@ def create_test_raster(
     if attrs is not None:
         if 'res' in attrs:
             res = attrs['res']
+
     # set coords for test raster, 2D coords only
     raster[dims[0]] = np.linspace((data.shape[0] - 1) * res[0], 0, data.shape[0])
     raster[dims[1]] = np.linspace(0, (data.shape[1] - 1) * res[1], data.shape[1])
 
-    raster[dims[0]] = np.linspace((data.shape[0] - 1)/2, 0, data.shape[0])
-    raster[dims[1]] = np.linspace(0, (data.shape[1] - 1)/2, data.shape[1])
+    # assign units to coords
+    raster[dims[0]].attrs["units"] = "m"
+    raster[dims[1]].attrs["units"] = "m"
 
     if has_cuda_and_cupy() and 'cupy' in backend:
         import cupy
