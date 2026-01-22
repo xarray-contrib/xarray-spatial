@@ -15,7 +15,7 @@ Basic Pattern
    my_dataarray = xr.DataArray(...)
    hillshaded_dataarray = hillshade(my_dataarray)
 
-Check out the user guide `here <https://github.com/makepath/xarray-spatial/blob/master/examples/user_guide>`_.
+Check out the user guide `here <https://github.com/xarray-contrib/xarray-spatial/blob/master/examples/user_guide>`_.
 
 
 Dependencies

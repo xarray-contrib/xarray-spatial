@@ -24,7 +24,7 @@
 <tr>
   <td>License</td>
   <td>
-    <a href="https://github.com/makepath/xarray-spatial/blob/master/LICENSE.txt">
+    <a href="https://github.com/xarray-contrib/xarray-spatial/blob/master/LICENSE.txt">
     <img src="https://img.shields.io/pypi/l/xarray-spatial.svg"
          alt="MIT" />
     </a>
@@ -32,7 +32,7 @@
 
   <td>People</td>
   <td>
-    <img src="https://img.shields.io/github/contributors/makepath/xarray-spatial"
+    <img src="https://img.shields.io/github/contributors/xarray-contrib/xarray-spatial"
          alt="GitHub contributors" />
   </td>
 </tr>
@@ -41,14 +41,14 @@
   <td>Build Status</td>
   <td>
     <div>
-    <a href="https://github.com/makepath/xarray-spatial/actions/workflows/test.yml">
-    <img src="https://github.com/makepath/xarray-spatial/actions/workflows/test.yml/badge.svg"
+    <a href="https://github.com/xarray-contrib/xarray-spatial/actions/workflows/test.yml">
+    <img src="https://github.com/xarray-contrib/xarray-spatial/actions/workflows/test.yml/badge.svg"
          alt="Current github actions build status" />
     </a>
     </div>
     <div>
-    <a href="https://github.com/makepath/xarray-spatial/actions/workflows/pypi-publish.yml">
-    <img src="https://github.com/makepath/xarray-spatial/actions/workflows/pypi-publish.yml/badge.svg"
+    <a href="https://github.com/xarray-contrib/xarray-spatial/actions/workflows/pypi-publish.yml">
+    <img src="https://github.com/xarray-contrib/xarray-spatial/actions/workflows/pypi-publish.yml/badge.svg"
          alt="Current github actions build status" />
     </a>
     </div>
@@ -61,20 +61,14 @@
   <td>Coverage</td>
   <td>
     <div>
-      <a href="https:https://codecov.io/gh/makepath/xarray-spatial">
-      <img alt="Language grade: Python" src="https://codecov.io/gh/makepath/xarray-spatial/branch/master/graph/badge.svg"/>
+      <a href="https:https://codecov.io/gh/xarray-contrib/xarray-spatial">
+      <img alt="Language grade: Python" src="https://codecov.io/gh/xarray-contrib/xarray-spatial/branch/master/graph/badge.svg"/>
       </a>
     </div>
   </td>
 
 </tr>
 </table>
-
--------
-
-
-[![History of OS GIS Timeline](img/featured-badge-gh.svg)](https://makepath.com/history-of-open-source-gis/)
-
 
 -------
 ![title](img/composite_map.gif)
@@ -286,4 +280,4 @@ With the introduction of projects like Numba, Python gained new ways to provide 
 #### Citation
 Cite this code:
 
-`makepath/xarray-spatial, https://github.com/makepath/xarray-spatial, ©2020-2026.`
+`xarray-contrib/xarray-spatial, https://github.com/xarray-contrib/xarray-spatial, ©2020-2026.`

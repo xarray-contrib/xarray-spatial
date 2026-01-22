@@ -1,6 +1,6 @@
 # Contributing to Xarray-Spatial
 
-As stated in [Xarray Spatial code of conduct](https://github.com/makepath/xarray-spatial/blob/master/CODE_OF_CONDUCT.md), a primary goal of Xarray Spatial is to be inclusive to the largest number of contributors. However, we do have some requests for how contributions should be made. Please read these guidelines before contributing to have a most positive experience with Xarray Spatial.
+As stated in [Xarray Spatial code of conduct](https://github.com/xarray-contrib/xarray-spatial/blob/master/CODE_OF_CONDUCT.md), a primary goal of Xarray Spatial is to be inclusive to the largest number of contributors. However, we do have some requests for how contributions should be made. Please read these guidelines before contributing to have a most positive experience with Xarray Spatial.
 
 ### Getting Started
 

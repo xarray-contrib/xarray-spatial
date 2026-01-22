@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.abspath('../..'))
 
 project = u'xarray_spatial'
 copyright = u'2020-{}, makepath'.format(datetime.now().year)
-author = u'makepath'
+author = u'Xarray-Spatial Contributors'
 
 version = release = xrspatial.__version__
 
@@ -95,7 +95,7 @@ html_favicon = '_static/img/favicon.ico'
 #
 html_theme_options = {
     "external_links": [],
-    "github_url": "https://github.com/makepath/xarray-spatial",
+    "github_url": "https://github.com/xarray-contrib/xarray-spatial",
     "navbar_end": ["navbar-icon-links"],
 }
 
