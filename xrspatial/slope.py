@@ -26,7 +26,6 @@ from xrspatial.utils import ArrayTypeFunctionMapping
 from xrspatial.utils import cuda_args
 from xrspatial.utils import get_dataarray_resolution
 from xrspatial.utils import ngjit
-from xrspatial.utils import warn_if_unit_mismatch
 
 
 @ngjit
@@ -181,9 +180,6 @@ def slope(agg: xr.DataArray,
               dtype=float32)
         Dimensions without coordinates: dim_0, dim_1
     """
-
-    # warn if we strongly suspect degrees + meters mismatch
-    warn_if_unit_mismatch(agg)
 
     cellsize_x, cellsize_y = get_dataarray_resolution(agg)
     mapper = ArrayTypeFunctionMapping(

@@ -1,6 +1,7 @@
 from xrspatial.aspect import aspect  # noqa
 from xrspatial.bump import bump  # noqa
 from xrspatial.classify import binary  # noqa
+from xrspatial.diagnostics import diagnose  # noqa
 from xrspatial.classify import equal_interval  # noqa
 from xrspatial.classify import natural_breaks  # noqa
 from xrspatial.classify import quantile  # noqa
