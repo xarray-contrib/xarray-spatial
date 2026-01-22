@@ -768,7 +768,7 @@ def _focal_stats_cupy(agg, kernel, stats_funcs):
             attrs=agg.attrs
           )
         stats_aggs.append(stats_agg)
-    stats = xr.concat(stats_aggs, pd.Index(stats_funcs, name='stats'))
+    stats = xr.concat(stats_aggs, pd.Index(stats_funcs, name='stats', dtype=object))
     return stats
 
 
@@ -786,7 +786,7 @@ def _focal_stats_cpu(agg, kernel, stats_funcs):
     for stats in stats_funcs:
         stats_agg = apply(agg, kernel, func=_function_mapping[stats])
         stats_aggs.append(stats_agg)
-    stats = xr.concat(stats_aggs, pd.Index(stats_funcs, name='stats'))
+    stats = xr.concat(stats_aggs, pd.Index(stats_funcs, name='stats', dtype=object))
     return stats
 
 
