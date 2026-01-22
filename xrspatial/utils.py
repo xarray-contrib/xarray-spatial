@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from math import ceil
+import warnings
 
 import datashader as ds
 import datashader.transfer_functions as tf
@@ -449,3 +450,244 @@ def color_values(agg, color_key, alpha=255):
     _converted_colors = {k: _convert_color(v) for k, v in color_key.items()}
     f = np.vectorize(lambda v: _converted_colors.get(v, 0))
     return tf.Image(f(agg.data))
+
+
+def _infer_coord_unit_type(coord: xr.DataArray, cellsize: float) -> str:
+    """
+    Heuristic to classify a spatial coordinate axis as:
+    - 'degrees'
+    - 'linear'   (meters/feet/etc)
+    - 'unknown'
+
+    Parameters
+    ----------
+    coord : xr.DataArray
+        1D coordinate variable (x or y).
+    cellsize : float
+        Mean spacing along this coordinate.
+
+    Returns
+    -------
+    str
+    """
+    units = str(coord.attrs.get("units", "")).lower()
+
+    # 1) Explicit units, if present
+    if "degree" in units or units in ("deg", "degrees"):
+        return "degrees"
+    if units in ("m", "meter", "metre", "meters", "metres",
+                 "km", "kilometer", "kilometre", "kilometers", "kilometres",
+                 "ft", "foot", "feet"):
+        return "linear"
+
+    # 2) Numeric heuristics (very conservative)
+    vals = coord.values
+    if vals.size < 2 or not np.issubdtype(vals.dtype, np.number):
+        return "unknown"
+
+    vmin = float(np.nanmin(vals))
+    vmax = float(np.nanmax(vals))
+    span = abs(vmax - vmin)
+    dx = abs(float(cellsize))
+
+    # Typical global geographic axes: span <= 360, spacing ~1e-5–0.5 deg
+    if -360.0 <= vmin <= 360.0 and -360.0 <= vmax <= 360.0:
+        if 1e-5 <= dx <= 0.5:
+            return "degrees"
+
+    # Typical projected axes in meters: span >> 1, spacing > ~0.1
+    # (e.g. UTM / national grids)
+    if span > 1000.0 and dx >= 0.1:
+        return "linear"
+
+    return "unknown"
+
+
+def _infer_vertical_unit_type(agg):
+    units = str(agg.attrs.get("units", "")).lower()
+
+    # Cheap / reliable first
+    if any(k in units for k in ("degree", "deg")) or "rad" in units:
+        return "angle"
+    if units in ("m", "meter", "metre", "meters", "metres",
+                 "km", "kilometer", "kilometre", "kilometers", "kilometres",
+                 "ft", "foot", "feet"):
+        return "elevation"
+
+    # Numeric fallback: sample only (never full compute)
+    data = agg.data
+    try:
+        vmin, vmax = _sample_windows_min_max(data, max_window_elems=65536, windows=5)
+    except Exception:
+        return "unknown"
+
+    if not np.isfinite(vmin) or not np.isfinite(vmax):
+        return "unknown"
+
+    span = vmax - vmin
+
+    # Elevation-ish heuristic
+    if 10.0 <= span <= 20000.0 and vmin > -500.0:
+        return "elevation"
+
+    # Angle-ish heuristic
+    if -360.0 <= vmin <= 360.0 and -360.0 <= vmax <= 360.0 and span <= 720.0:
+        return "angle"
+
+    return "unknown"
+
+
+def warn_if_unit_mismatch(agg: xr.DataArray) -> None:
+    """
+    Heuristic check for horizontal vs vertical unit mismatch.
+
+    Intended to catch the common case of:
+    - coordinates in degrees (lon/lat)
+    - elevation values in meters/feet
+
+    Emits a UserWarning if a likely mismatch is detected.
+    """
+    try:
+        cellsize_x, cellsize_y = get_dataarray_resolution(agg)
+    except Exception:
+        # If we can't even get a resolution, we also can't say much
+        return
+
+    # pick "x" and "y" coords in a generic way:
+    #   - typically dims are ('y', 'x') or ('lat', 'lon')
+    #   - fall back to last two dims
+    if len(agg.dims) < 2:
+        return
+
+    dim_y, dim_x = agg.dims[-2], agg.dims[-1]
+    coord_x = agg.coords.get(dim_x, None)
+    coord_y = agg.coords.get(dim_y, None)
+
+    if coord_x is None or coord_y is None:
+        # Can't infer spatial types without coords
+        return
+
+    horiz_x = _infer_coord_unit_type(coord_x, cellsize_x)
+    horiz_y = _infer_coord_unit_type(coord_y, cellsize_y)
+    vert = _infer_vertical_unit_type(agg)
+
+    horiz_types = {horiz_x, horiz_y} - {"unknown"}
+
+    # Only act if we have some signal about horizontal AND vertical
+    if not horiz_types or vert == "unknown":
+        return
+
+    # If any axis looks like degrees and vertical looks like elevation,
+    # it's almost certainly "lat/lon degrees + meter elevations"
+    if "degrees" in horiz_types and vert == "elevation":
+        warnings.warn(
+            "xrspatial: input DataArray appears to have coordinates in degrees "
+            "but elevation values in a linear unit (e.g. meters/feet). "
+            "Slope/aspect operations expect horizontal distances in the same "
+            "units as vertical. Consider reprojecting to a projected CRS with "
+            "meter-based coordinates before calling `slope`.",
+            UserWarning,
+        )
+
+
+def _to_float_scalar(x) -> float:
+    """Convert numpy/cupy scalar or 0-d array to python float safely."""
+    if cupy is not None:
+        # cupy.ndarray scalar
+        if isinstance(x, cupy.ndarray):
+            return float(cupy.asnumpy(x).item())
+        # cupy scalar type
+        if x.__class__.__module__.startswith("cupy") and hasattr(x, "item"):
+            return float(x.item())
+
+    if hasattr(x, "item"):
+        return float(x.item())
+    return float(x)
+
+
+def _sample_windows_min_max(
+    data,
+    *,
+    max_window_elems: int = 65536,   # e.g. 256x256
+    windows: int = 5,                # corners + center default
+) -> tuple[float, float]:
+    """
+    Estimate (nanmin, nanmax) from a small sample of windows.
+
+    Works for numpy, cupy, dask+numpy, dask+cupy. Only computes on the sampled
+    windows, not the full array.
+    """
+    # Normalize to last-2D sampling (y,x). For higher dims, sample first index.
+    if hasattr(data, "ndim") and data.ndim >= 3:
+        prefix = (0,) * (data.ndim - 2)
+    else:
+        prefix = ()
+
+    # Determine y/x sizes
+    shape = data.shape
+    ny, nx = shape[-2], shape[-1]
+
+    if ny == 0 or nx == 0:
+        return np.nan, np.nan
+
+    # Choose a square-ish window size bounded by array shape
+    w = int(np.sqrt(max_window_elems))
+    w = max(1, min(w, ny, nx))
+
+    # Define window anchor positions: (top-left), (top-right), (bottom-left), (bottom-right), (center)
+    anchors = [
+        (0, 0),
+        (0, max(0, nx - w)),
+        (max(0, ny - w), 0),
+        (max(0, ny - w), max(0, nx - w)),
+    ]
+    if windows >= 5:
+        anchors.append((max(0, ny // 2 - w // 2), max(0, nx // 2 - w // 2)))
+
+    # If windows > 5, sprinkle additional evenly-spaced anchors (optional)
+    if windows > 5:
+        extra = windows - 5
+        ys = np.linspace(0, max(0, ny - w), extra + 2, dtype=int)[1:-1]
+        xs = np.linspace(0, max(0, nx - w), extra + 2, dtype=int)[1:-1]
+        for y0, x0 in zip(ys, xs):
+            anchors.append((int(y0), int(x0)))
+
+    # Reduce min/max across sampled windows
+    mins = []
+    maxs = []
+
+    for y0, x0 in anchors:
+        sl = prefix + (slice(y0, y0 + w), slice(x0, x0 + w))
+        win = data[sl]
+
+        if da is not None and isinstance(win, da.Array):
+            # Compute scalars only on this window
+            mins.append(da.nanmin(win))
+            maxs.append(da.nanmax(win))
+        elif cupy is not None and isinstance(win, cupy.ndarray):
+            mins.append(cupy.nanmin(win))
+            maxs.append(cupy.nanmax(win))
+        else:
+            mins.append(np.nanmin(win))
+            maxs.append(np.nanmax(win))
+
+    # Finalize: if dask, compute the scalar graph now (still tiny)
+    if da is not None and any(isinstance(m, da.Array) for m in mins):
+        mn = da.nanmin(da.stack(mins)).compute()
+        mx = da.nanmax(da.stack(maxs)).compute()
+        return _to_float_scalar(mn), _to_float_scalar(mx)
+
+    # If cupy scalars, convert safely
+    if cupy is not None and (any(isinstance(m, cupy.ndarray) for m in mins) or
+                             any(getattr(m.__class__, "__module__", "").startswith("cupy") for m in mins)):
+        mn = mins[0]
+        mx = maxs[0]
+        # reduce on device
+        for m in mins[1:]:
+            mn = cupy.minimum(mn, m)
+        for m in maxs[1:]:
+            mx = cupy.maximum(mx, m)
+        return _to_float_scalar(mn), _to_float_scalar(mx)
+
+    # numpy scalars
+    return float(np.nanmin(np.array(mins, dtype=float))), float(np.nanmax(np.array(maxs, dtype=float)))

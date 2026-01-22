@@ -22,7 +22,10 @@ import xarray as xr
 from numba import cuda
 
 # local modules
-from xrspatial.utils import (ArrayTypeFunctionMapping, cuda_args, get_dataarray_resolution, ngjit)
+from xrspatial.utils import ArrayTypeFunctionMapping
+from xrspatial.utils import cuda_args
+from xrspatial.utils import get_dataarray_resolution
+from xrspatial.utils import ngjit
 
 
 @ngjit
