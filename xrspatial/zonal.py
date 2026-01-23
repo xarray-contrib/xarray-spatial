@@ -1492,10 +1492,10 @@ def regions(
     Parameters
     ----------
     raster : xr.DataArray
-    connections : int, default=4
+    neighborhood : int, default=4
         4 or 8 pixel-based connectivity.
-    name: str, default='regions'
-        output xr.DataArray.name property.
+    name : str, default='regions'
+        Output xr.DataArray.name property.
 
     Returns
     -------
@@ -1507,90 +1507,56 @@ def regions(
 
     Examples
     --------
-    .. plot::
-       :include-source:
-
-        import matplotlib.pyplot as plt
-        import numpy as np
-        import xarray as xr
-
-        from xrspatial import generate_terrain
-        from xrspatial.zonal import regions
-
-
-        # Generate Example Terrain
-        W = 500
-        H = 300
-
-        template_terrain = xr.DataArray(np.zeros((H, W)))
-        x_range=(-20e6, 20e6)
-        y_range=(-20e6, 20e6)
-
-        terrain_agg = generate_terrain(
-            template_terrain, x_range=x_range, y_range=y_range
-        )
-
-        # Edit Attributes
-        terrain_agg = terrain_agg.assign_attrs(
-            {
-                'Description': 'Example Terrain',
-                'units': 'km',
-                'Max Elevation': '4000',
-            }
-        )
-
-        terrain_agg = terrain_agg.rename({'x': 'lon', 'y': 'lat'})
-        terrain_agg = terrain_agg.rename('Elevation')
-
-        # Create Regions
-        regions_agg = regions(terrain_agg)
-
-        # Edit Attributes
-        regions_agg = regions_agg.assign_attrs({'Description': 'Example Regions',
-                                                'units': ''})
-        regions_agg = regions_agg.rename('Region Value')
-
-        # Plot Terrain (Values)
-        terrain_agg.plot(cmap = 'terrain', aspect = 2, size = 4)
-        plt.title("Terrain (Values)")
-        plt.ylabel("latitude")
-        plt.xlabel("longitude")
-
-        # Plot Regions
-        regions_agg.plot(cmap = 'terrain', aspect = 2, size = 4)
-        plt.title("Regions")
-        plt.ylabel("latitude")
-        plt.xlabel("longitude")
-
     .. sourcecode:: python
 
-        >>> print(terrain_agg[200:203, 200:202])
-        <xarray.DataArray 'Elevation' (lat: 3, lon: 2)>
-        array([[1264.02296597, 1261.947921  ],
-               [1285.37105519, 1282.48079719],
-               [1306.02339636, 1303.4069579 ]])
-        Coordinates:
-        * lon      (lon) float64 -3.96e+06 -3.88e+06
-        * lat      (lat) float64 6.733e+06 6.867e+06 7e+06
-        Attributes:
-            res:            (80000.0, 133333.3333333333)
-            Description:    Example Terrain
-            units:          km
-            Max Elevation:  4000
+        >>> import numpy as np
+        >>> import xarray as xr
+        >>> from xrspatial.zonal import regions
 
-        >>> print(regions_agg[200:203, 200:202])
-        <xarray.DataArray 'Region Value' (lat: 3, lon: 2)>
-        array([[39557., 39558.],
-               [39943., 39944.],
-               [40327., 40328.]])
-        Coordinates:
-        * lon      (lon) float64 -3.96e+06 -3.88e+06
-        * lat      (lat) float64 6.733e+06 6.867e+06 7e+06
-        Attributes:
-            res:            (80000.0, 133333.3333333333)
-            Description:    Example Regions
-            units:
-            Max Elevation:  4000
+        >>> # Create a raster with distinct value regions
+        >>> arr = np.array([[1, 1, 0, 2, 2],
+        ...                 [1, 1, 0, 2, 2],
+        ...                 [0, 0, 0, 0, 0],
+        ...                 [3, 3, 0, 3, 3],
+        ...                 [3, 3, 0, 3, 3]], dtype=np.float64)
+        >>> raster = xr.DataArray(arr, dims=['y', 'x'])
+        >>> print(raster.values)
+        [[1. 1. 0. 2. 2.]
+         [1. 1. 0. 2. 2.]
+         [0. 0. 0. 0. 0.]
+         [3. 3. 0. 3. 3.]
+         [3. 3. 0. 3. 3.]]
+
+        >>> # With 4-connectivity, each group of connected same-value
+        >>> # pixels becomes a unique region
+        >>> result = regions(raster, neighborhood=4)
+        >>> print(result.values)
+        [[1. 1. 2. 3. 3.]
+         [1. 1. 2. 3. 3.]
+         [2. 2. 2. 2. 2.]
+         [5. 5. 2. 6. 6.]
+         [5. 5. 2. 6. 6.]]
+
+        >>> # Note: The two bottom-corner 3-regions are separate because
+        >>> # they are not connected (the zero-valued cross separates them)
+        >>> print(f"Number of unique regions: {len(np.unique(result.values))}")
+        Number of unique regions: 5
+
+        >>> # With 8-connectivity, diagonal neighbors also connect regions
+        >>> diagonal = np.array([[1, 0, 1],
+        ...                      [0, 1, 0],
+        ...                      [1, 0, 1]], dtype=np.float64)
+        >>> raster_diag = xr.DataArray(diagonal, dims=['y', 'x'])
+        >>> result_8 = regions(raster_diag, neighborhood=8)
+        >>> print(result_8.values)
+        [[1. 2. 1.]
+         [2. 1. 2.]
+         [1. 2. 1.]]
+
+        >>> # All 1s are connected diagonally into one region,
+        >>> # all 0s form another region
+        >>> print(f"Number of unique regions: {len(np.unique(result_8.values))}")
+        Number of unique regions: 2
     """
     if neighborhood not in (4, 8):
         raise ValueError("`neighborhood` value must be either 4 or 8)")
