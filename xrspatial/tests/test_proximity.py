@@ -281,3 +281,72 @@ def test_proximity_distance_against_qgis(raster, qgis_proximity_distance_target_
 
     general_output_checks(input_raster, xrspatial_result)
     np.testing.assert_allclose(xrspatial_result.data, qgis_result.data, rtol=1e-05, equal_nan=True)
+
+
+@pytest.mark.skipif(da is None, reason="dask is not installed")
+def test_proximity_dask_coord_arrays_are_lazy():
+    """
+    Test that coordinate arrays (xs, ys) are created as dask arrays
+    when input is a dask array, avoiding memory issues with large rasters.
+
+    This is a regression test for the issue where xs and ys were created
+    as numpy arrays before checking if the input was a dask array,
+    causing memory issues for large datasets.
+    """
+    from unittest.mock import patch
+
+    height, width = 100, 120
+    data = np.zeros((height, width), dtype=np.float64)
+    # Add some target pixels
+    data[10, 10] = 1.0
+    data[50, 60] = 2.0
+    data[90, 100] = 3.0
+
+    _lon = np.linspace(-180, 180, width)
+    _lat = np.linspace(90, -90, height)
+    raster = xr.DataArray(data, dims=['lat', 'lon'])
+    raster['lon'] = _lon
+    raster['lat'] = _lat
+    # Create dask-backed array with chunks
+    raster.data = da.from_array(data, chunks=(25, 30))
+
+    # Track calls to np.tile and np.repeat with the full raster shape
+    original_tile = np.tile
+    original_repeat = np.repeat
+    large_numpy_array_created = []
+
+    def tracking_tile(A, reps):
+        result = original_tile(A, reps)
+        # Check if result would be the size of the full coordinate grid
+        if result.size >= height * width:
+            large_numpy_array_created.append(('tile', result.shape))
+        return result
+
+    def tracking_repeat(a, repeats, axis=None):
+        result = original_repeat(a, repeats, axis=axis)
+        # Check if result would be the size of the full coordinate grid
+        if result.size >= height * width:
+            large_numpy_array_created.append(('repeat', result.shape))
+        return result
+
+    with patch.object(np, 'tile', tracking_tile):
+        with patch.object(np, 'repeat', tracking_repeat):
+            result = proximity(raster, x='lon', y='lat')
+
+    # Verify no large numpy coordinate arrays were created
+    assert len(large_numpy_array_created) == 0, (
+        f"Large numpy arrays were created for coordinates: {large_numpy_array_created}. "
+        "For dask inputs, coordinate arrays should be created using dask operations."
+    )
+
+    # Verify result is a dask array
+    assert isinstance(result.data, da.Array), "Result should be a dask array"
+
+    # Verify correctness by computing and checking a few values
+    computed = result.compute()
+    # Check that target pixels have distance 0
+    assert computed.data[10, 10] == 0.0
+    assert computed.data[50, 60] == 0.0
+    assert computed.data[90, 100] == 0.0
+    # Check that non-target pixels have positive distance
+    assert computed.data[0, 0] > 0.0

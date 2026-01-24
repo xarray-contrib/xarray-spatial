@@ -420,16 +420,22 @@ def _process(
 
     target_values = np.asarray(target_values)
 
-    # x-y coordinates of each pixel.
-    # flatten the coords of input raster and reshape to 2d
-    xs = np.tile(raster[x].data, raster.shape[0]).reshape(raster.shape)
-    ys = np.repeat(raster[y].data, raster.shape[1]).reshape(raster.shape)
-
     if max_distance is None:
         max_distance = np.inf
 
+    # Get 1D coordinate arrays (these are small, just the axis coordinates)
+    x_coords = raster[x].data
+    y_coords = raster[y].data
+
+    # Ensure 1D coords are numpy arrays for max_possible_distance calculation
+    if da is not None and isinstance(x_coords, da.Array):
+        x_coords = x_coords.compute()
+    if da is not None and isinstance(y_coords, da.Array):
+        y_coords = y_coords.compute()
+
+    # Compute max_possible_distance using coordinate endpoints directly
     max_possible_distance = _distance(
-        xs[0][0], xs[-1][-1], ys[0][0], ys[-1][-1], distance_metric
+        x_coords[0], x_coords[-1], y_coords[0], y_coords[-1], distance_metric
     )
 
     @ngjit
@@ -620,13 +626,21 @@ def _process(
         return out
 
     if isinstance(raster.data, np.ndarray):
-        # numpy case
+        # numpy case - create full coordinate arrays as numpy
+        xs = np.tile(x_coords, raster.shape[0]).reshape(raster.shape)
+        ys = np.repeat(y_coords, raster.shape[1]).reshape(raster.shape)
         result = _process_numpy(raster.data, xs, ys)
 
     elif da is not None and isinstance(raster.data, da.Array):
-        # dask + numpy case
-        xs = da.from_array(xs, chunks=(raster.chunks))
-        ys = da.from_array(ys, chunks=(raster.chunks))
+        # dask case - create coordinate arrays as dask arrays directly
+        # This avoids materializing the full arrays in memory
+        # Convert 1D coords to dask arrays first
+        x_coords_da = da.from_array(x_coords, chunks=x_coords.shape[0])
+        y_coords_da = da.from_array(y_coords, chunks=y_coords.shape[0])
+        xs = da.tile(x_coords_da, (raster.shape[0], 1))
+        ys = da.repeat(y_coords_da, raster.shape[1]).reshape(raster.shape)
+        xs = xs.rechunk(raster.chunks)
+        ys = ys.rechunk(raster.chunks)
         result = _process_dask(raster, xs, ys)
 
     return result
