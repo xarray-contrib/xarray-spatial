@@ -53,6 +53,21 @@ def _stats_count(data):
     return stats_count
 
 
+def _stats_majority(data):
+    if isinstance(data, np.ndarray):
+        # numpy case
+        values, counts = np.unique(data, return_counts=True)
+        return values[np.argmax(counts)]
+    elif isinstance(data, cupy.ndarray):
+        # cupy case
+        values, counts = cupy.unique(data, return_counts=True)
+        return values[cupy.argmax(counts)]
+    else:
+        # dask case
+        values, counts = da.unique(data, return_counts=True)
+        return values[da.argmax(counts)]
+
+
 _DEFAULT_STATS = dict(
     mean=lambda z: z.mean(),
     max=lambda z: z.max(),
@@ -61,6 +76,7 @@ _DEFAULT_STATS = dict(
     std=lambda z: z.std(),
     var=lambda z: z.var(),
     count=lambda z: _stats_count(z),
+    majority=lambda z: _stats_majority(z),
 )
 
 
@@ -246,8 +262,9 @@ def _stats_dask_numpy(
     stats_df = dd.concat([dd.from_dask_array(s) for s in stats_dict.values()], axis=1)
     # name columns
     stats_df.columns = stats_dict.keys()
-    # select columns
-    stats_df = stats_df[['zone'] + list(stats_funcs.keys())]
+    # select columns (only include stats that were actually computed)
+    computed_stats = [s for s in stats_funcs.keys() if s in stats_dict]
+    stats_df = stats_df[['zone'] + computed_stats]
 
     if not select_all_zones:
         # only return zones specified in `zone_ids`
@@ -414,6 +431,7 @@ def stats(
         "std",
         "var",
         "count",
+        "majority",
     ],
     nodata_values: Union[int, float] = None,
     return_type: str = 'pandas.DataFrame',
@@ -449,7 +467,7 @@ def stats(
         all zones will be used.
 
     stats_funcs : dict, or list of strings, default=['mean', 'max', 'min',
-        'sum', 'std', 'var', 'count']
+        'sum', 'std', 'var', 'count', 'majority']
         The statistics to calculate for each zone. If a list, possible
         choices are subsets of the default options.
         In the dictionary case, all of its values must be
