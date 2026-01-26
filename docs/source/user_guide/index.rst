@@ -7,6 +7,7 @@ User Guide
 .. toctree::
    :maxdepth: 1
 
+   data_types
    classification
    focal
    multispectral
