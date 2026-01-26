@@ -1034,6 +1034,12 @@ def crosstab(
     if values.ndim not in [2, 3]:
         raise ValueError("`values` must use either 2D or 3D coordinates.")
 
+    # For 2D values, validate and align chunks between zones and values
+    # This is critical for dask arrays that may come from different sources
+    # (e.g., xarray Datasets via to_array().sel())
+    if values.ndim == 2:
+        validate_arrays(zones, values)
+
     agg_2d = ["percentage", "count"]
     agg_3d_numpy = _DEFAULT_STATS.keys()
     agg_3d_dask = ["count"]
