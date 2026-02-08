@@ -4,7 +4,7 @@ As stated in [Xarray Spatial code of conduct](https://github.com/xarray-contrib/
 
 ### Getting Started
 
-Information about installation and setting up a development environment can be found at the [Getting Started page] https://xarray-spatial.readthedocs.io/getting_started/index.html.
+Information about installation and setting up a development environment can be found at the [Getting Started page](https://xarray-spatial.readthedocs.io/en/stable/getting_started/index.html).
 
 ### Choosing something to work on 
 
@@ -28,7 +28,7 @@ In order to avoid duplication of effort, it's always a good idea to comment on a
 
 1. Make sure that there is a corresponding issue for your change first. If there isn't yet, create one.
 
-2. Create a fork of the Xarray Spatial repository on GitHub (this is only done before *first*) contribution).
+2. Create a fork of the Xarray Spatial repository on GitHub (this is only done before *first*) contribution.
 
 3. Create a branch off the `master` branch with a meaningful name. Preferably include issue number and a few keywords, so that we will have a rough idea what the branch refers to, without looking up the issue. 
 
@@ -45,4 +45,4 @@ In order to avoid duplication of effort, it's always a good idea to comment on a
 
 ### Attribution
 
-Portions of text derived from [Bokeh CONTRIBUTING file]: (https://github.com/bokeh/bokeh/blob/branch-2.4/.github/CONTRIBUTING.md)
+Portions of text derived from [Bokeh CONTRIBUTING file]: (https://github.com/bokeh/bokeh/blob/branch-3.4/.github/CONTRIBUTING.md)
