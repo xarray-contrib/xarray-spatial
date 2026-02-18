@@ -4,7 +4,7 @@ As stated in [Xarray Spatial code of conduct](https://github.com/xarray-contrib/
 
 ### Getting Started
 
-Information about installation and setting up a development environment can be found at the [Getting Started page] https://xarray-spatial.readthedocs.io/getting_started/index.html.
+Information about installation and setting up a development environment can be found at the [Getting Started page](https://xarray-spatial.readthedocs.io/en/stable/getting_started/index.html).
 
 ### Choosing something to work on 
 
@@ -41,8 +41,3 @@ In order to avoid duplication of effort, it's always a good idea to comment on a
 7. We don't accept code contributions without tests. If there are valid reasons for not including a test, please discuss this in the issue.
 
 8. We will review your PR as time permits. Reviewers may comment on your contributions, ask you questions regarding the implementation or request changes. If changes are requested, push new commits to the existing branch. Do *NOT* rebase, amend, or cherry-pick published commits. Any of those actions will make us start the review from scratch. If you need updates from `master`, just merge it into your branch.
-
-
-### Attribution
-
-Portions of text derived from [Bokeh CONTRIBUTING file]: (https://github.com/bokeh/bokeh/blob/branch-2.4/.github/CONTRIBUTING.md)
