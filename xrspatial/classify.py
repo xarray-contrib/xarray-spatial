@@ -398,18 +398,10 @@ def _run_quantile(data, k, module):
 
 
 def _run_dask_cupy_quantile(data, k):
-    w = 100.0 / k
-    p = np.arange(w, 100 + w, w)
-    if p[-1] > 100.0:
-        p[-1] = 100.0
-
-    finite_mask = da.isfinite(data)
-    finite_data = data[finite_mask].compute()
-    # transfer from GPU to CPU
-    finite_data_np = cupy.asnumpy(finite_data)
-    q = np.percentile(finite_data_np, p)
-    q = np.unique(q)
-    return q
+    # Convert dask+cupy chunks to numpy one at a time via map_blocks,
+    # then use dask's streaming approximate percentile (no full materialization).
+    data_cpu = data.map_blocks(cupy.asnumpy, dtype=data.dtype, meta=np.array(()))
+    return _run_quantile(data_cpu, k, da)
 
 
 def _quantile(agg, k):
@@ -661,12 +653,46 @@ def _run_cupy_natural_break(agg, num_sample, k):
     return out
 
 
+def _generate_sample_indices(num_data, num_sample, seed=1234567890):
+    """Generate sorted sample indices for natural breaks sampling.
+
+    For small datasets (<=10M elements), uses the same linspace+shuffle
+    approach as the numpy backend for exact reproducibility.
+    For large datasets, uses memory-efficient RandomState.choice()
+    which is O(num_sample) rather than O(num_data).
+    """
+    generator = np.random.RandomState(seed)
+    if num_data <= 10_000_000:
+        idx = np.linspace(
+            0, num_data, num_data, endpoint=False, dtype=np.uint32
+        )
+        generator.shuffle(idx)
+        sample_idx = idx[:num_sample]
+    else:
+        sample_idx = generator.choice(
+            num_data, size=num_sample, replace=False
+        )
+    # sort for efficient dask chunk access
+    sample_idx.sort()
+    return sample_idx
+
+
 def _run_dask_natural_break(agg, num_sample, k):
     data = agg.data
     max_data = float(da.max(data[da.isfinite(data)]).compute())
-    data_flat_np = np.asarray(data.ravel().compute())
 
-    bins, uvk = _compute_natural_break_bins(data_flat_np, num_sample, k, max_data)
+    num_data = data.size
+    if num_sample is not None and num_sample < num_data:
+        # Sample lazily from dask array; only materialize the sample
+        sample_idx = _generate_sample_indices(num_data, num_sample)
+        sample_data_np = np.asarray(data.ravel()[sample_idx].compute())
+        bins, uvk = _compute_natural_break_bins(
+            sample_data_np, None, k, max_data)
+    else:
+        data_flat_np = np.asarray(data.ravel().compute())
+        bins, uvk = _compute_natural_break_bins(
+            data_flat_np, None, k, max_data)
+
     out = _bin(agg, bins, np.arange(uvk))
     return out
 
@@ -674,9 +700,20 @@ def _run_dask_natural_break(agg, num_sample, k):
 def _run_dask_cupy_natural_break(agg, num_sample, k):
     data = agg.data
     max_data = float(da.max(data[da.isfinite(data)]).compute().item())
-    data_flat_np = cupy.asnumpy(data.ravel().compute())
 
-    bins, uvk = _compute_natural_break_bins(data_flat_np, num_sample, k, max_data)
+    num_data = data.size
+    if num_sample is not None and num_sample < num_data:
+        # Sample lazily from dask array; only materialize the sample
+        sample_idx = _generate_sample_indices(num_data, num_sample)
+        sample_data = data.ravel()[sample_idx].compute()
+        sample_data_np = cupy.asnumpy(sample_data)
+        bins, uvk = _compute_natural_break_bins(
+            sample_data_np, None, k, max_data)
+    else:
+        data_flat_np = cupy.asnumpy(data.ravel().compute())
+        bins, uvk = _compute_natural_break_bins(
+            data_flat_np, None, k, max_data)
+
     out = _bin(agg, bins, np.arange(uvk))
     return out
 
