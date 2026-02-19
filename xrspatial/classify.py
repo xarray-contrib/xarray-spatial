@@ -15,8 +15,10 @@ except ImportError:
         ndarray = False
 
 try:
+    import dask
     import dask.array as da
 except ImportError:
+    dask = None
     da = None
 
 import numba as nb
@@ -232,9 +234,8 @@ def _run_gpu_bin(data, bins, new_values, out):
 
 
 def _run_cupy_bin(data, bins, new_values):
-    # replace inf by nan to avoid classify these values as we want to treat them as outliers
-    data = cupy.where(data == cupy.inf, cupy.nan, data)
-    data = cupy.where(data == -cupy.inf, cupy.nan, data)
+    # replace ±inf with nan in a single pass to avoid classifying outliers
+    data = cupy.where(cupy.isinf(data), cupy.nan, data)
 
     bins_cupy = cupy.asarray(bins)
     new_values_cupy = cupy.asarray(new_values)
@@ -679,7 +680,9 @@ def _generate_sample_indices(num_data, num_sample, seed=1234567890):
 
 def _run_dask_natural_break(agg, num_sample, k):
     data = agg.data
-    max_data = float(da.max(data[da.isfinite(data)]).compute())
+    # Avoid boolean fancy indexing which flattens dask arrays and
+    # produces chunks of unknown size; use element-wise where instead
+    max_data = float(da.nanmax(da.where(da.isinf(data), np.nan, data)).compute())
 
     num_data = data.size
     if num_sample is not None and num_sample < num_data:
@@ -699,7 +702,9 @@ def _run_dask_natural_break(agg, num_sample, k):
 
 def _run_dask_cupy_natural_break(agg, num_sample, k):
     data = agg.data
-    max_data = float(da.max(data[da.isfinite(data)]).compute().item())
+    # Avoid boolean fancy indexing which flattens dask arrays and
+    # produces chunks of unknown size; use element-wise where instead
+    max_data = float(da.nanmax(da.where(da.isinf(data), np.nan, data)).compute().item())
 
     num_data = data.size
     if num_sample is not None and num_sample < num_data:
@@ -817,57 +822,28 @@ def natural_breaks(agg: xr.DataArray,
 
 
 def _run_equal_interval(agg, k, module):
-    data = agg.data.ravel()
-    if module == cupy:
-        nan = cupy.nan
-        inf = cupy.inf
-    else:
-        nan = np.nan
-        inf = np.inf
+    data = agg.data
 
-    data = module.where(data == inf, nan, data)
-    data = module.where(data == -inf, nan, data)
+    # Replace ±inf with nan in a single pass (no ravel needed)
+    data_clean = module.where(module.isinf(data), np.nan, data)
 
-    max_data = module.nanmax(data)
-    min_data = module.nanmin(data)
+    min_lazy = module.nanmin(data_clean)
+    max_lazy = module.nanmax(data_clean)
 
     if module == cupy:
-        min_data = min_data.get()
-        max_data = max_data.get()
-
-    if module == da:
-        min_data = min_data.compute()
-        max_data = max_data.compute()
-
-    width = (max_data - min_data) * 1.0 / k
-    cuts = module.arange(min_data + width, max_data + width, width)
-    l_cuts = cuts.shape[0]
-    if l_cuts > k:
-        # handle overshooting
-        cuts = cuts[0:k]
-
-    if module == da:
-        # work around to assign cuts[-1] = max_data
-        bins = da.concatenate([cuts[:k-1], [max_data]])
-        out = _bin(agg, bins, np.arange(l_cuts))
+        min_data = float(min_lazy.get())
+        max_data = float(max_lazy.get())
+    elif module == da:
+        # Compute both in a single pass over the data
+        min_data, max_data = dask.compute(min_lazy, max_lazy)
+        min_data = float(min_data)
+        max_data = float(max_data)
     else:
-        cuts[-1] = max_data
-        out = _bin(agg, cuts, np.arange(l_cuts))
+        min_data = float(min_lazy)
+        max_data = float(max_lazy)
 
-    return out
-
-
-def _run_dask_cupy_equal_interval(agg, k):
-    data = agg.data.ravel()
-
-    # replace inf with nan
-    data = da.where(data == np.inf, np.nan, data)
-    data = da.where(data == -np.inf, np.nan, data)
-
-    min_data = float(da.nanmin(data).compute().item())
-    max_data = float(da.nanmax(data).compute().item())
-
-    width = (max_data - min_data) * 1.0 / k
+    width = (max_data - min_data) / k
+    # Build cuts as numpy — only k elements, no need for dask/cupy overhead
     cuts = np.arange(min_data + width, max_data + width, width)
     l_cuts = cuts.shape[0]
     if l_cuts > k:
@@ -938,7 +914,7 @@ def equal_interval(agg: xr.DataArray,
         numpy_func=lambda *args: _run_equal_interval(*args, module=np),
         dask_func=lambda *args: _run_equal_interval(*args, module=da),
         cupy_func=lambda *args: _run_equal_interval(*args, module=cupy),
-        dask_cupy_func=_run_dask_cupy_equal_interval
+        dask_cupy_func=lambda *args: _run_equal_interval(*args, module=da)
     )
     out = mapper(agg)(agg, k)
     return xr.DataArray(out,
