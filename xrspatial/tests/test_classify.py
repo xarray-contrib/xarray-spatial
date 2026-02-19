@@ -3,7 +3,8 @@ import pytest
 import xarray as xr
 
 from xrspatial import binary, equal_interval, natural_breaks, quantile, reclassify
-from xrspatial.tests.general_checks import (create_test_raster,
+from xrspatial.tests.general_checks import (assert_input_data_unmodified,
+                                            create_test_raster,
                                             cuda_and_cupy_available,
                                             dask_array_available,
                                             general_output_checks)
@@ -350,3 +351,150 @@ def test_natural_breaks_dask_numpy_num_sample(result_natural_breaks_num_sample):
     k, num_sample, expected_result = result_natural_breaks_num_sample
     dask_natural_breaks = natural_breaks(dask_agg, k=k, num_sample=num_sample)
     general_output_checks(dask_agg, dask_natural_breaks, expected_result, verify_dtype=True)
+
+
+@dask_array_available
+@cuda_and_cupy_available
+def test_natural_breaks_dask_cupy_num_sample(result_natural_breaks_num_sample):
+    dask_cupy_agg = input_data('dask+cupy')
+    k, num_sample, expected_result = result_natural_breaks_num_sample
+    dask_cupy_natural_breaks = natural_breaks(dask_cupy_agg, k=k, num_sample=num_sample)
+    general_output_checks(
+        dask_cupy_agg, dask_cupy_natural_breaks, expected_result, verify_dtype=True)
+
+
+# --- Input mutation tests ---
+# Classification functions must not modify the input DataArray.
+# natural_breaks is most critical because _run_jenks sorts in-place.
+
+def test_binary_does_not_modify_input():
+    agg = input_data()
+    original = agg.copy(deep=True)
+    binary(agg, [1, 2, 3])
+    assert_input_data_unmodified(original, agg)
+
+
+def test_reclassify_does_not_modify_input():
+    agg = input_data()
+    original = agg.copy(deep=True)
+    reclassify(agg, bins=[10, 15, np.inf], new_values=[1, 2, 3])
+    assert_input_data_unmodified(original, agg)
+
+
+def test_quantile_does_not_modify_input():
+    agg = input_data()
+    original = agg.copy(deep=True)
+    quantile(agg, k=5)
+    assert_input_data_unmodified(original, agg)
+
+
+def test_natural_breaks_does_not_modify_input():
+    agg = input_data()
+    original = agg.copy(deep=True)
+    natural_breaks(agg, k=5)
+    assert_input_data_unmodified(original, agg)
+
+
+def test_equal_interval_does_not_modify_input():
+    agg = input_data()
+    original = agg.copy(deep=True)
+    equal_interval(agg, k=3)
+    assert_input_data_unmodified(original, agg)
+
+
+# --- num_sample=None test ---
+# Tests the code path where all data is used without sampling.
+# For the test data (20 elements), this produces the same result
+# as default num_sample=20000 since 20000 > 20.
+
+def test_natural_breaks_numpy_num_sample_none(result_natural_breaks):
+    numpy_agg = input_data()
+    k, expected_result = result_natural_breaks
+    result = natural_breaks(numpy_agg, k=k, num_sample=None)
+    general_output_checks(numpy_agg, result, expected_result, verify_dtype=True)
+
+
+# --- Edge cases for equal_interval ---
+
+def test_equal_interval_k_equals_1():
+    agg = input_data()
+    result = equal_interval(agg, k=1)
+    result_data = result.data
+    # All finite values should be in class 0
+    finite_mask = np.isfinite(result_data)
+    assert np.all(result_data[finite_mask] == 0)
+    # Non-finite input positions should be NaN in output
+    input_finite = np.isfinite(agg.data)
+    assert np.all(np.isnan(result_data[~input_finite]))
+
+
+# --- All-NaN edge cases ---
+# These document current failure behavior for degenerate inputs.
+
+def test_equal_interval_all_nan():
+    data = np.full((4, 5), np.nan)
+    agg = xr.DataArray(data)
+    with pytest.raises(ValueError):
+        equal_interval(agg, k=3)
+
+
+def test_natural_breaks_all_nan():
+    data = np.full((4, 5), np.nan)
+    agg = xr.DataArray(data)
+    with pytest.raises(ValueError):
+        natural_breaks(agg, k=3)
+
+
+# --- Name parameter tests ---
+
+def test_output_name_default():
+    agg = input_data()
+    assert binary(agg, [1, 2]).name == 'binary'
+    assert reclassify(agg, [10, 15], [1, 2]).name == 'reclassify'
+    assert quantile(agg, k=3).name == 'quantile'
+    assert natural_breaks(agg, k=3).name == 'natural_breaks'
+    assert equal_interval(agg, k=3).name == 'equal_interval'
+
+
+def test_output_name_custom():
+    agg = input_data()
+    assert binary(agg, [1, 2], name='custom').name == 'custom'
+    assert reclassify(agg, [10, 15], [1, 2], name='custom').name == 'custom'
+    assert quantile(agg, k=3, name='custom').name == 'custom'
+    assert natural_breaks(agg, k=3, name='custom').name == 'custom'
+    assert equal_interval(agg, k=3, name='custom').name == 'custom'
+
+
+# --- Cross-backend consistency for natural_breaks ---
+# Verifies that cupy/dask backends produce identical results to numpy
+# using a different dataset (10x10 arange) than the fixture tests.
+
+@cuda_and_cupy_available
+def test_natural_breaks_cupy_matches_numpy():
+    import cupy as cp
+    elevation = np.arange(100, dtype=np.float64).reshape(10, 10)
+    numpy_agg = xr.DataArray(elevation)
+    cupy_agg = xr.DataArray(cp.asarray(elevation))
+
+    k = 5
+    numpy_result = natural_breaks(numpy_agg, k=k)
+    cupy_result = natural_breaks(cupy_agg, k=k)
+
+    np.testing.assert_allclose(
+        numpy_result.data, cp.asnumpy(cupy_result.data), equal_nan=True
+    )
+
+
+@dask_array_available
+def test_natural_breaks_dask_matches_numpy():
+    elevation = np.arange(100, dtype=np.float64).reshape(10, 10)
+    numpy_agg = xr.DataArray(elevation)
+    dask_agg = xr.DataArray(da.from_array(elevation, chunks=(5, 5)))
+
+    k = 5
+    numpy_result = natural_breaks(numpy_agg, k=k)
+    dask_result = natural_breaks(dask_agg, k=k)
+
+    np.testing.assert_allclose(
+        numpy_result.data, dask_result.data.compute(), equal_nan=True
+    )
