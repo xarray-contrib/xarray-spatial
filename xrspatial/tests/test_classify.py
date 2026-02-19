@@ -284,3 +284,69 @@ def test_equal_interval_cupy(result_equal_interval):
     cupy_agg = input_data(backend='cupy')
     cupy_result = equal_interval(cupy_agg, k=k)
     general_output_checks(cupy_agg, cupy_result, expected_result, verify_dtype=True)
+
+
+@dask_array_available
+@cuda_and_cupy_available
+def test_equal_interval_dask_cupy(result_equal_interval):
+    k, expected_result = result_equal_interval
+    dask_cupy_agg = input_data(backend='dask+cupy')
+    dask_cupy_result = equal_interval(dask_cupy_agg, k=k)
+    general_output_checks(dask_cupy_agg, dask_cupy_result, expected_result, verify_dtype=True)
+
+
+@dask_array_available
+@cuda_and_cupy_available
+def test_quantile_dask_cupy(result_quantile):
+    # Relaxed verification (same pattern as test_quantile_dask_numpy)
+    # because percentile is computed on CPU from materialized data
+    dask_cupy_agg = input_data('dask+cupy')
+    k, expected_result = result_quantile
+    dask_cupy_quantile = quantile(dask_cupy_agg, k=k)
+    general_output_checks(dask_cupy_agg, dask_cupy_quantile)
+    dask_cupy_quantile = dask_cupy_quantile.compute()
+    import cupy as cp
+    result_data = cp.asnumpy(dask_cupy_quantile.data)
+    unique_elements = np.unique(result_data[np.isfinite(result_data)])
+    assert len(unique_elements) == k
+
+
+@cuda_and_cupy_available
+def test_natural_breaks_cupy(result_natural_breaks):
+    cupy_agg = input_data('cupy')
+    k, expected_result = result_natural_breaks
+    cupy_natural_breaks = natural_breaks(cupy_agg, k=k)
+    general_output_checks(cupy_agg, cupy_natural_breaks, expected_result, verify_dtype=True)
+
+
+@dask_array_available
+def test_natural_breaks_dask_numpy(result_natural_breaks):
+    dask_agg = input_data('dask+numpy')
+    k, expected_result = result_natural_breaks
+    dask_natural_breaks = natural_breaks(dask_agg, k=k)
+    general_output_checks(dask_agg, dask_natural_breaks, expected_result, verify_dtype=True)
+
+
+@dask_array_available
+@cuda_and_cupy_available
+def test_natural_breaks_dask_cupy(result_natural_breaks):
+    dask_cupy_agg = input_data('dask+cupy')
+    k, expected_result = result_natural_breaks
+    dask_cupy_natural_breaks = natural_breaks(dask_cupy_agg, k=k)
+    general_output_checks(dask_cupy_agg, dask_cupy_natural_breaks, expected_result, verify_dtype=True)
+
+
+@cuda_and_cupy_available
+def test_natural_breaks_cupy_num_sample(result_natural_breaks_num_sample):
+    cupy_agg = input_data('cupy')
+    k, num_sample, expected_result = result_natural_breaks_num_sample
+    cupy_natural_breaks = natural_breaks(cupy_agg, k=k, num_sample=num_sample)
+    general_output_checks(cupy_agg, cupy_natural_breaks, expected_result, verify_dtype=True)
+
+
+@dask_array_available
+def test_natural_breaks_dask_numpy_num_sample(result_natural_breaks_num_sample):
+    dask_agg = input_data('dask+numpy')
+    k, num_sample, expected_result = result_natural_breaks_num_sample
+    dask_natural_breaks = natural_breaks(dask_agg, k=k, num_sample=num_sample)
+    general_output_checks(dask_agg, dask_natural_breaks, expected_result, verify_dtype=True)

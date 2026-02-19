@@ -398,10 +398,18 @@ def _run_quantile(data, k, module):
 
 
 def _run_dask_cupy_quantile(data, k):
-    msg = 'Currently percentile calculation has not' \
-          'been supported for Dask array backed by CuPy.' \
-          'See issue at https://github.com/dask/dask/issues/6942'
-    raise NotImplementedError(msg)
+    w = 100.0 / k
+    p = np.arange(w, 100 + w, w)
+    if p[-1] > 100.0:
+        p[-1] = 100.0
+
+    finite_mask = da.isfinite(data)
+    finite_data = data[finite_mask].compute()
+    # transfer from GPU to CPU
+    finite_data_np = cupy.asnumpy(finite_data)
+    q = np.percentile(finite_data_np, p)
+    q = np.unique(q)
+    return q
 
 
 def _quantile(agg, k):
@@ -575,25 +583,28 @@ def _run_jenks(data, n_classes):
     return kclass
 
 
-def _run_natural_break(agg, num_sample, k):
-    data = agg.data
-    num_data = data.size
-    max_data = np.max(data[np.isfinite(data)])
+def _compute_natural_break_bins(data_flat_np, num_sample, k, max_data):
+    """Shared helper: compute natural break bins from a flat numpy array.
+
+    Returns (bins, uvk) where bins is a numpy array of bin edges
+    and uvk is the number of unique values.
+    """
+    num_data = data_flat_np.size
 
     if num_sample is not None and num_sample < num_data:
         # randomly select sample from the whole dataset
         # create a pseudo random number generator
-        # Note: cupy and nupy generate different random numbers
+        # Note: cupy and numpy generate different random numbers
         # use numpy.random to ensure the same result
         generator = np.random.RandomState(1234567890)
         idx = np.linspace(
-            0, data.size, data.size, endpoint=False, dtype=np.uint32
+            0, num_data, num_data, endpoint=False, dtype=np.uint32
         )
         generator.shuffle(idx)
         sample_idx = idx[:num_sample]
-        sample_data = data.flatten()[sample_idx]
+        sample_data = data_flat_np[sample_idx]
     else:
-        sample_data = data.flatten()
+        sample_data = data_flat_np
 
     # warning if number of total data points to fit the model bigger than 40k
     if sample_data.size >= 40000:
@@ -627,6 +638,45 @@ def _run_natural_break(agg, num_sample, k):
         bins = np.array(centroids[1:])
         bins[-1] = max_data
 
+    return bins, uvk
+
+
+def _run_natural_break(agg, num_sample, k):
+    data = agg.data
+    max_data = float(np.max(data[np.isfinite(data)]))
+    data_flat_np = data.flatten()
+
+    bins, uvk = _compute_natural_break_bins(data_flat_np, num_sample, k, max_data)
+    out = _bin(agg, bins, np.arange(uvk))
+    return out
+
+
+def _run_cupy_natural_break(agg, num_sample, k):
+    data = agg.data
+    max_data = float(cupy.max(data[cupy.isfinite(data)]).get())
+    data_flat_np = cupy.asnumpy(data.ravel())
+
+    bins, uvk = _compute_natural_break_bins(data_flat_np, num_sample, k, max_data)
+    out = _bin(agg, bins, np.arange(uvk))
+    return out
+
+
+def _run_dask_natural_break(agg, num_sample, k):
+    data = agg.data
+    max_data = float(da.max(data[da.isfinite(data)]).compute())
+    data_flat_np = np.asarray(data.ravel().compute())
+
+    bins, uvk = _compute_natural_break_bins(data_flat_np, num_sample, k, max_data)
+    out = _bin(agg, bins, np.arange(uvk))
+    return out
+
+
+def _run_dask_cupy_natural_break(agg, num_sample, k):
+    data = agg.data
+    max_data = float(da.max(data[da.isfinite(data)]).compute().item())
+    data_flat_np = cupy.asnumpy(data.ravel().compute())
+
+    bins, uvk = _compute_natural_break_bins(data_flat_np, num_sample, k, max_data)
     out = _bin(agg, bins, np.arange(uvk))
     return out
 
@@ -644,7 +694,8 @@ def natural_breaks(agg: xr.DataArray,
     Parameters
     ----------
     agg : xarray.DataArray
-        2D NumPy DataArray of values to be reclassified.
+        2D NumPy, CuPy, NumPy-backed Dask, or CuPy-backed Dask array
+        of values to be reclassified.
     num_sample : int, default=20000
         Number of sample data points used to fit the model.
         Natural Breaks (Jenks) classification is indeed O(n²) complexity,
@@ -715,13 +766,10 @@ def natural_breaks(agg: xr.DataArray,
     """
 
     mapper = ArrayTypeFunctionMapping(
-        numpy_func=lambda *args: _run_natural_break(*args),
-        dask_func=lambda *args: not_implemented_func(
-            *args, messages='natural_breaks() does not support dask with numpy backed DataArray.'),  # noqa
-        cupy_func=lambda *args: not_implemented_func(
-            *args, messages='natural_breaks() does not support cupy backed DataArray.'),  # noqa
-        dask_cupy_func=lambda *args: not_implemented_func(
-            *args, messages='natural_breaks() does not support dask with cupy backed DataArray.'),  # noqa
+        numpy_func=_run_natural_break,
+        dask_func=_run_dask_natural_break,
+        cupy_func=_run_cupy_natural_break,
+        dask_cupy_func=_run_dask_cupy_natural_break,
     )
     out = mapper(agg)(agg, num_sample, k)
     return xr.DataArray(out,
@@ -769,6 +817,27 @@ def _run_equal_interval(agg, k, module):
         cuts[-1] = max_data
         out = _bin(agg, cuts, np.arange(l_cuts))
 
+    return out
+
+
+def _run_dask_cupy_equal_interval(agg, k):
+    data = agg.data.ravel()
+
+    # replace inf with nan
+    data = da.where(data == np.inf, np.nan, data)
+    data = da.where(data == -np.inf, np.nan, data)
+
+    min_data = float(da.nanmin(data).compute().item())
+    max_data = float(da.nanmax(data).compute().item())
+
+    width = (max_data - min_data) * 1.0 / k
+    cuts = np.arange(min_data + width, max_data + width, width)
+    l_cuts = cuts.shape[0]
+    if l_cuts > k:
+        cuts = cuts[0:k]
+
+    cuts[-1] = max_data
+    out = _bin(agg, cuts, np.arange(l_cuts))
     return out
 
 
@@ -832,8 +901,7 @@ def equal_interval(agg: xr.DataArray,
         numpy_func=lambda *args: _run_equal_interval(*args, module=np),
         dask_func=lambda *args: _run_equal_interval(*args, module=da),
         cupy_func=lambda *args: _run_equal_interval(*args, module=cupy),
-        dask_cupy_func=lambda *args: not_implemented_func(
-            *args, messages='equal_interval() does support dask with cupy backed DataArray.'),  # noqa
+        dask_cupy_func=_run_dask_cupy_equal_interval
     )
     out = mapper(agg)(agg, k)
     return xr.DataArray(out,
