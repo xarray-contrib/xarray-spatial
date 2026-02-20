@@ -259,7 +259,7 @@ def _stats_dask_numpy(
         )
 
     # generate dask dataframe
-    stats_df = dd.concat([dd.from_dask_array(s) for s in stats_dict.values()], axis=1)
+    stats_df = dd.concat([dd.from_dask_array(s) for s in stats_dict.values()], axis=1, ignore_unknown_divisions=True)
     # name columns
     stats_df.columns = stats_dict.keys()
     # select columns (only include stats that were actually computed)
@@ -272,7 +272,7 @@ def _stats_dask_numpy(
         for index, row in stats_df.iterrows():
             if row['zone'] in zone_ids:
                 selected_rows.append(stats_df.loc[index])
-        stats_df = dd.concat(selected_rows)
+        stats_df = dd.concat(selected_rows, ignore_unknown_divisions=True)
 
     return stats_df
 
