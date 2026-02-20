@@ -15,8 +15,10 @@ except ImportError:
         ndarray = False
 
 try:
+    import dask
     import dask.array as da
 except ImportError:
+    dask = None
     da = None
 
 import numba as nb
@@ -232,9 +234,8 @@ def _run_gpu_bin(data, bins, new_values, out):
 
 
 def _run_cupy_bin(data, bins, new_values):
-    # replace inf by nan to avoid classify these values as we want to treat them as outliers
-    data = cupy.where(data == cupy.inf, cupy.nan, data)
-    data = cupy.where(data == -cupy.inf, cupy.nan, data)
+    # replace ±inf with nan in a single pass to avoid classifying outliers
+    data = cupy.where(cupy.isinf(data), cupy.nan, data)
 
     bins_cupy = cupy.asarray(bins)
     new_values_cupy = cupy.asarray(new_values)
@@ -398,10 +399,10 @@ def _run_quantile(data, k, module):
 
 
 def _run_dask_cupy_quantile(data, k):
-    msg = 'Currently percentile calculation has not' \
-          'been supported for Dask array backed by CuPy.' \
-          'See issue at https://github.com/dask/dask/issues/6942'
-    raise NotImplementedError(msg)
+    # Convert dask+cupy chunks to numpy one at a time via map_blocks,
+    # then use dask's streaming approximate percentile (no full materialization).
+    data_cpu = data.map_blocks(cupy.asnumpy, dtype=data.dtype, meta=np.array(()))
+    return _run_quantile(data_cpu, k, da)
 
 
 def _quantile(agg, k):
@@ -575,25 +576,28 @@ def _run_jenks(data, n_classes):
     return kclass
 
 
-def _run_natural_break(agg, num_sample, k):
-    data = agg.data
-    num_data = data.size
-    max_data = np.max(data[np.isfinite(data)])
+def _compute_natural_break_bins(data_flat_np, num_sample, k, max_data):
+    """Shared helper: compute natural break bins from a flat numpy array.
+
+    Returns (bins, uvk) where bins is a numpy array of bin edges
+    and uvk is the number of unique values.
+    """
+    num_data = data_flat_np.size
 
     if num_sample is not None and num_sample < num_data:
         # randomly select sample from the whole dataset
         # create a pseudo random number generator
-        # Note: cupy and nupy generate different random numbers
+        # Note: cupy and numpy generate different random numbers
         # use numpy.random to ensure the same result
         generator = np.random.RandomState(1234567890)
         idx = np.linspace(
-            0, data.size, data.size, endpoint=False, dtype=np.uint32
+            0, num_data, num_data, endpoint=False, dtype=np.uint32
         )
         generator.shuffle(idx)
         sample_idx = idx[:num_sample]
-        sample_data = data.flatten()[sample_idx]
+        sample_data = data_flat_np[sample_idx]
     else:
-        sample_data = data.flatten()
+        sample_data = data_flat_np
 
     # warning if number of total data points to fit the model bigger than 40k
     if sample_data.size >= 40000:
@@ -627,6 +631,94 @@ def _run_natural_break(agg, num_sample, k):
         bins = np.array(centroids[1:])
         bins[-1] = max_data
 
+    return bins, uvk
+
+
+def _run_natural_break(agg, num_sample, k):
+    data = agg.data
+    max_data = float(np.max(data[np.isfinite(data)]))
+    data_flat_np = data.flatten()
+
+    bins, uvk = _compute_natural_break_bins(data_flat_np, num_sample, k, max_data)
+    out = _bin(agg, bins, np.arange(uvk))
+    return out
+
+
+def _run_cupy_natural_break(agg, num_sample, k):
+    data = agg.data
+    max_data = float(cupy.max(data[cupy.isfinite(data)]).get())
+    data_flat_np = cupy.asnumpy(data.ravel())
+
+    bins, uvk = _compute_natural_break_bins(data_flat_np, num_sample, k, max_data)
+    out = _bin(agg, bins, np.arange(uvk))
+    return out
+
+
+def _generate_sample_indices(num_data, num_sample, seed=1234567890):
+    """Generate sorted sample indices for natural breaks sampling.
+
+    For small datasets (<=10M elements), uses the same linspace+shuffle
+    approach as the numpy backend for exact reproducibility.
+    For large datasets, uses memory-efficient RandomState.choice()
+    which is O(num_sample) rather than O(num_data).
+    """
+    generator = np.random.RandomState(seed)
+    if num_data <= 10_000_000:
+        idx = np.linspace(
+            0, num_data, num_data, endpoint=False, dtype=np.uint32
+        )
+        generator.shuffle(idx)
+        sample_idx = idx[:num_sample]
+    else:
+        sample_idx = generator.choice(
+            num_data, size=num_sample, replace=False
+        )
+    # sort for efficient dask chunk access
+    sample_idx.sort()
+    return sample_idx
+
+
+def _run_dask_natural_break(agg, num_sample, k):
+    data = agg.data
+    # Avoid boolean fancy indexing which flattens dask arrays and
+    # produces chunks of unknown size; use element-wise where instead
+    max_data = float(da.nanmax(da.where(da.isinf(data), np.nan, data)).compute())
+
+    num_data = data.size
+    if num_sample is not None and num_sample < num_data:
+        # Sample lazily from dask array; only materialize the sample
+        sample_idx = _generate_sample_indices(num_data, num_sample)
+        sample_data_np = np.asarray(data.ravel()[sample_idx].compute())
+        bins, uvk = _compute_natural_break_bins(
+            sample_data_np, None, k, max_data)
+    else:
+        data_flat_np = np.asarray(data.ravel().compute())
+        bins, uvk = _compute_natural_break_bins(
+            data_flat_np, None, k, max_data)
+
+    out = _bin(agg, bins, np.arange(uvk))
+    return out
+
+
+def _run_dask_cupy_natural_break(agg, num_sample, k):
+    data = agg.data
+    # Avoid boolean fancy indexing which flattens dask arrays and
+    # produces chunks of unknown size; use element-wise where instead
+    max_data = float(da.nanmax(da.where(da.isinf(data), np.nan, data)).compute().item())
+
+    num_data = data.size
+    if num_sample is not None and num_sample < num_data:
+        # Sample lazily from dask array; only materialize the sample
+        sample_idx = _generate_sample_indices(num_data, num_sample)
+        sample_data = data.ravel()[sample_idx].compute()
+        sample_data_np = cupy.asnumpy(sample_data)
+        bins, uvk = _compute_natural_break_bins(
+            sample_data_np, None, k, max_data)
+    else:
+        data_flat_np = cupy.asnumpy(data.ravel().compute())
+        bins, uvk = _compute_natural_break_bins(
+            data_flat_np, None, k, max_data)
+
     out = _bin(agg, bins, np.arange(uvk))
     return out
 
@@ -644,7 +736,8 @@ def natural_breaks(agg: xr.DataArray,
     Parameters
     ----------
     agg : xarray.DataArray
-        2D NumPy DataArray of values to be reclassified.
+        2D NumPy, CuPy, NumPy-backed Dask, or CuPy-backed Dask array
+        of values to be reclassified.
     num_sample : int, default=20000
         Number of sample data points used to fit the model.
         Natural Breaks (Jenks) classification is indeed O(n²) complexity,
@@ -715,13 +808,10 @@ def natural_breaks(agg: xr.DataArray,
     """
 
     mapper = ArrayTypeFunctionMapping(
-        numpy_func=lambda *args: _run_natural_break(*args),
-        dask_func=lambda *args: not_implemented_func(
-            *args, messages='natural_breaks() does not support dask with numpy backed DataArray.'),  # noqa
-        cupy_func=lambda *args: not_implemented_func(
-            *args, messages='natural_breaks() does not support cupy backed DataArray.'),  # noqa
-        dask_cupy_func=lambda *args: not_implemented_func(
-            *args, messages='natural_breaks() does not support dask with cupy backed DataArray.'),  # noqa
+        numpy_func=_run_natural_break,
+        dask_func=_run_dask_natural_break,
+        cupy_func=_run_cupy_natural_break,
+        dask_cupy_func=_run_dask_cupy_natural_break,
     )
     out = mapper(agg)(agg, num_sample, k)
     return xr.DataArray(out,
@@ -732,43 +822,35 @@ def natural_breaks(agg: xr.DataArray,
 
 
 def _run_equal_interval(agg, k, module):
-    data = agg.data.ravel()
+    data = agg.data
+
+    # Replace ±inf with nan in a single pass (no ravel needed)
+    data_clean = module.where(module.isinf(data), np.nan, data)
+
+    min_lazy = module.nanmin(data_clean)
+    max_lazy = module.nanmax(data_clean)
+
     if module == cupy:
-        nan = cupy.nan
-        inf = cupy.inf
+        min_data = float(min_lazy.get())
+        max_data = float(max_lazy.get())
+    elif module == da:
+        # Compute both in a single pass over the data
+        min_data, max_data = dask.compute(min_lazy, max_lazy)
+        min_data = float(min_data)
+        max_data = float(max_data)
     else:
-        nan = np.nan
-        inf = np.inf
+        min_data = float(min_lazy)
+        max_data = float(max_lazy)
 
-    data = module.where(data == inf, nan, data)
-    data = module.where(data == -inf, nan, data)
-
-    max_data = module.nanmax(data)
-    min_data = module.nanmin(data)
-
-    if module == cupy:
-        min_data = min_data.get()
-        max_data = max_data.get()
-
-    if module == da:
-        min_data = min_data.compute()
-        max_data = max_data.compute()
-
-    width = (max_data - min_data) * 1.0 / k
-    cuts = module.arange(min_data + width, max_data + width, width)
+    width = (max_data - min_data) / k
+    # Build cuts as numpy — only k elements, no need for dask/cupy overhead
+    cuts = np.arange(min_data + width, max_data + width, width)
     l_cuts = cuts.shape[0]
     if l_cuts > k:
-        # handle overshooting
         cuts = cuts[0:k]
 
-    if module == da:
-        # work around to assign cuts[-1] = max_data
-        bins = da.concatenate([cuts[:k-1], [max_data]])
-        out = _bin(agg, bins, np.arange(l_cuts))
-    else:
-        cuts[-1] = max_data
-        out = _bin(agg, cuts, np.arange(l_cuts))
-
+    cuts[-1] = max_data
+    out = _bin(agg, cuts, np.arange(l_cuts))
     return out
 
 
@@ -832,12 +914,442 @@ def equal_interval(agg: xr.DataArray,
         numpy_func=lambda *args: _run_equal_interval(*args, module=np),
         dask_func=lambda *args: _run_equal_interval(*args, module=da),
         cupy_func=lambda *args: _run_equal_interval(*args, module=cupy),
-        dask_cupy_func=lambda *args: not_implemented_func(
-            *args, messages='equal_interval() does support dask with cupy backed DataArray.'),  # noqa
+        dask_cupy_func=lambda *args: _run_equal_interval(*args, module=da)
     )
     out = mapper(agg)(agg, k)
     return xr.DataArray(out,
                         name=name,
                         coords=agg.coords,
                         dims=agg.dims,
+                        attrs=agg.attrs)
+
+
+def _run_std_mean(agg, module):
+    data = agg.data
+    data_clean = module.where(module.isinf(data), np.nan, data)
+    mean_lazy = module.nanmean(data_clean)
+    std_lazy = module.nanstd(data_clean)
+    max_lazy = module.nanmax(data_clean)
+
+    if module == cupy:
+        mean_v = float(mean_lazy.get())
+        std_v = float(std_lazy.get())
+        max_v = float(max_lazy.get())
+    elif module == da:
+        mean_v, std_v, max_v = dask.compute(mean_lazy, std_lazy, max_lazy)
+        mean_v, std_v, max_v = float(mean_v), float(std_v), float(max_v)
+    else:
+        mean_v, std_v, max_v = float(mean_lazy), float(std_lazy), float(max_lazy)
+
+    bins = np.sort(np.unique([
+        mean_v - 2 * std_v,
+        mean_v - std_v,
+        mean_v + std_v,
+        mean_v + 2 * std_v,
+        max_v,
+    ]))
+    out = _bin(agg, bins, np.arange(len(bins)))
+    return out
+
+
+def std_mean(agg: xr.DataArray,
+             name: Optional[str] = 'std_mean') -> xr.DataArray:
+    """
+    Classify data based on standard deviations from the mean.
+
+    Creates bins at mean +/- 1 and 2 standard deviations.
+
+    Parameters
+    ----------
+    agg : xarray.DataArray
+        2D NumPy, CuPy, NumPy-backed Dask, or CuPy-backed Dask array
+        of values to be classified.
+    name : str, default='std_mean'
+        Name of output aggregate array.
+
+    Returns
+    -------
+    std_mean_agg : xarray.DataArray, of the same type as `agg`
+        2D aggregate array of standard deviation classifications.
+        All other input attributes are preserved.
+
+    References
+    ----------
+        - PySAL: https://pysal.org/mapclassify/_modules/mapclassify/classifiers.html#StdMean
+    """
+    mapper = ArrayTypeFunctionMapping(
+        numpy_func=lambda *args: _run_std_mean(*args, module=np),
+        dask_func=lambda *args: _run_std_mean(*args, module=da),
+        cupy_func=lambda *args: _run_std_mean(*args, module=cupy),
+        dask_cupy_func=lambda *args: _run_std_mean(*args, module=da),
+    )
+    out = mapper(agg)(agg)
+    return xr.DataArray(out,
+                        name=name,
+                        dims=agg.dims,
+                        coords=agg.coords,
+                        attrs=agg.attrs)
+
+
+def _compute_head_tail_bins(values_np):
+    """Compute head/tail break bins from flat finite numpy values."""
+    bins = []
+    data = values_np.copy()
+    while len(data) > 1:
+        mean_v = float(np.nanmean(data))
+        bins.append(mean_v)
+        head = data[data > mean_v]
+        if len(head) == 0 or len(head) / len(data) > 0.40:
+            break
+        data = head
+    if not bins:
+        bins = [float(np.nanmean(values_np))]
+    bins.append(float(np.nanmax(values_np)))
+    return np.array(bins)
+
+
+def _run_head_tail_breaks(agg, module):
+    data = agg.data
+    if module == cupy:
+        finite = data[cupy.isfinite(data)]
+        values_np = cupy.asnumpy(finite)
+    else:
+        finite = data[np.isfinite(data)]
+        values_np = np.asarray(finite)
+
+    bins = _compute_head_tail_bins(values_np)
+    out = _bin(agg, bins, np.arange(len(bins)))
+    return out
+
+
+def _run_dask_head_tail_breaks(agg):
+    data = agg.data
+    data_clean = da.where(da.isinf(data), np.nan, data)
+    bins = []
+    mask = da.isfinite(data_clean)
+    while True:
+        current = da.where(mask, data_clean, np.nan)
+        mean_v = float(da.nanmean(current).compute())
+        bins.append(mean_v)
+        new_mask = mask & (data_clean > mean_v)
+        head_count = int(new_mask.sum().compute())
+        total_count = int(mask.sum().compute())
+        if head_count == 0 or head_count / total_count > 0.40:
+            break
+        mask = new_mask
+    max_v = float(da.nanmax(data_clean).compute())
+    bins.append(max_v)
+    bins = np.array(bins)
+    out = _bin(agg, bins, np.arange(len(bins)))
+    return out
+
+
+def head_tail_breaks(agg: xr.DataArray,
+                     name: Optional[str] = 'head_tail_breaks') -> xr.DataArray:
+    """
+    Classify data using the Head/Tail Breaks algorithm.
+
+    Iteratively partitions data around the mean. Values below the mean
+    form a class, and values above continue to be split until the head
+    proportion exceeds 40%.
+
+    Parameters
+    ----------
+    agg : xarray.DataArray
+        2D NumPy, CuPy, NumPy-backed Dask, or CuPy-backed Dask array
+        of values to be classified.
+    name : str, default='head_tail_breaks'
+        Name of output aggregate array.
+
+    Returns
+    -------
+    head_tail_agg : xarray.DataArray, of the same type as `agg`
+        2D aggregate array of head/tail break classifications.
+        All other input attributes are preserved.
+
+    References
+    ----------
+        - PySAL: https://pysal.org/mapclassify/_modules/mapclassify/classifiers.html#HeadTailBreaks
+    """
+    mapper = ArrayTypeFunctionMapping(
+        numpy_func=lambda *args: _run_head_tail_breaks(*args, module=np),
+        dask_func=_run_dask_head_tail_breaks,
+        cupy_func=lambda *args: _run_head_tail_breaks(*args, module=cupy),
+        dask_cupy_func=_run_dask_head_tail_breaks,
+    )
+    out = mapper(agg)(agg)
+    return xr.DataArray(out,
+                        name=name,
+                        dims=agg.dims,
+                        coords=agg.coords,
+                        attrs=agg.attrs)
+
+
+def _run_percentiles(data, pct, module):
+    q = module.percentile(data[module.isfinite(data)], pct)
+    q = module.unique(q)
+    return q
+
+
+def _run_dask_cupy_percentiles(data, pct):
+    data_cpu = data.map_blocks(cupy.asnumpy, dtype=data.dtype, meta=np.array(()))
+    return _run_percentiles(data_cpu, pct, da)
+
+
+def percentiles(agg: xr.DataArray,
+                pct: Optional[List] = None,
+                name: Optional[str] = 'percentiles') -> xr.DataArray:
+    """
+    Classify data based on percentile breakpoints.
+
+    Parameters
+    ----------
+    agg : xarray.DataArray
+        2D NumPy, CuPy, NumPy-backed Dask, or CuPy-backed Dask array
+        of values to be classified.
+    pct : list of float, default=[1, 10, 50, 90, 99]
+        Percentile values to use as breakpoints.
+    name : str, default='percentiles'
+        Name of output aggregate array.
+
+    Returns
+    -------
+    percentiles_agg : xarray.DataArray, of the same type as `agg`
+        2D aggregate array of percentile classifications.
+        All other input attributes are preserved.
+
+    References
+    ----------
+        - PySAL: https://pysal.org/mapclassify/_modules/mapclassify/classifiers.html#Percentiles
+    """
+    if pct is None:
+        pct = [1, 10, 50, 90, 99]
+
+    mapper = ArrayTypeFunctionMapping(
+        numpy_func=lambda *args: _run_percentiles(*args, module=np),
+        dask_func=lambda *args: _run_percentiles(*args, module=da),
+        cupy_func=lambda *args: _run_percentiles(*args, module=cupy),
+        dask_cupy_func=_run_dask_cupy_percentiles,
+    )
+    q = mapper(agg)(agg.data, pct)
+
+    # Materialize bin edges to numpy
+    if hasattr(q, 'compute'):
+        q_np = np.asarray(q.compute())
+    elif hasattr(q, 'get'):
+        q_np = np.asarray(q.get())
+    else:
+        q_np = np.asarray(q)
+
+    # Append max of finite data so all values get classified
+    data = agg.data
+    if hasattr(data, 'compute'):
+        max_v = float(da.nanmax(da.where(da.isinf(data), np.nan, data)).compute())
+    elif hasattr(data, 'get'):
+        clean = cupy.where(cupy.isinf(data), cupy.nan, data)
+        max_v = float(cupy.nanmax(clean).get())
+    else:
+        clean = np.where(np.isinf(data), np.nan, data)
+        max_v = float(np.nanmax(clean))
+
+    bins = np.sort(np.unique(np.append(q_np, max_v)))
+    k = len(bins)
+    out = _bin(agg, bins, np.arange(k))
+
+    return xr.DataArray(out,
+                        name=name,
+                        dims=agg.dims,
+                        coords=agg.coords,
+                        attrs=agg.attrs)
+
+
+def _compute_maximum_break_bins(values_np, k):
+    """Compute maximum breaks bins from sorted finite numpy values."""
+    uv = np.unique(values_np)
+    if len(uv) < k:
+        return uv
+    diffs = np.diff(uv)
+    n_gaps = min(k - 1, len(diffs))
+    top_indices = np.argsort(diffs, kind='stable')[-n_gaps:]
+    top_indices.sort()
+    bins = np.array([(uv[i] + uv[i + 1]) / 2.0 for i in top_indices])
+    bins = np.append(bins, float(uv[-1]))
+    return bins
+
+
+def _run_maximum_breaks(agg, k, module):
+    data = agg.data
+    if module == cupy:
+        finite = data[cupy.isfinite(data)]
+        values_np = cupy.asnumpy(finite)
+    else:
+        finite = data[np.isfinite(data)]
+        values_np = np.asarray(finite)
+
+    bins = _compute_maximum_break_bins(values_np, k)
+    out = _bin(agg, bins, np.arange(len(bins)))
+    return out
+
+
+def _run_dask_maximum_breaks(agg, k):
+    data = agg.data
+    data_clean = da.where(da.isinf(data), np.nan, data)
+    values_np = np.asarray(data_clean.ravel().compute())
+    values_np = values_np[np.isfinite(values_np)]
+    bins = _compute_maximum_break_bins(values_np, k)
+    out = _bin(agg, bins, np.arange(len(bins)))
+    return out
+
+
+def _run_dask_cupy_maximum_breaks(agg, k):
+    data = agg.data
+    data_clean = da.where(da.isinf(data), np.nan, data)
+    data_cpu = data_clean.map_blocks(cupy.asnumpy, dtype=data.dtype, meta=np.array(()))
+    values_np = np.asarray(data_cpu.ravel().compute())
+    values_np = values_np[np.isfinite(values_np)]
+    bins = _compute_maximum_break_bins(values_np, k)
+    out = _bin(agg, bins, np.arange(len(bins)))
+    return out
+
+
+def maximum_breaks(agg: xr.DataArray,
+                   k: int = 5,
+                   name: Optional[str] = 'maximum_breaks') -> xr.DataArray:
+    """
+    Classify data using the Maximum Breaks algorithm.
+
+    Finds the k-1 largest gaps between sorted unique values and uses
+    midpoints of those gaps as bin edges.
+
+    Parameters
+    ----------
+    agg : xarray.DataArray
+        2D NumPy, CuPy, NumPy-backed Dask, or CuPy-backed Dask array
+        of values to be classified.
+    k : int, default=5
+        Number of classes to be produced.
+    name : str, default='maximum_breaks'
+        Name of output aggregate array.
+
+    Returns
+    -------
+    max_breaks_agg : xarray.DataArray, of the same type as `agg`
+        2D aggregate array of maximum break classifications.
+        All other input attributes are preserved.
+
+    References
+    ----------
+        - PySAL: https://pysal.org/mapclassify/_modules/mapclassify/classifiers.html#MaximumBreaks
+    """
+    mapper = ArrayTypeFunctionMapping(
+        numpy_func=lambda *args: _run_maximum_breaks(*args, module=np),
+        dask_func=_run_dask_maximum_breaks,
+        cupy_func=lambda *args: _run_maximum_breaks(*args, module=cupy),
+        dask_cupy_func=_run_dask_cupy_maximum_breaks,
+    )
+    out = mapper(agg)(agg, k)
+    return xr.DataArray(out,
+                        name=name,
+                        dims=agg.dims,
+                        coords=agg.coords,
+                        attrs=agg.attrs)
+
+
+def _run_box_plot(agg, hinge, module):
+    data = agg.data
+    data_clean = module.where(module.isinf(data), np.nan, data)
+    finite_data = data_clean[module.isfinite(data_clean)]
+
+    if module == cupy:
+        q1 = float(cupy.percentile(finite_data, 25).get())
+        q2 = float(cupy.percentile(finite_data, 50).get())
+        q3 = float(cupy.percentile(finite_data, 75).get())
+        max_v = float(cupy.nanmax(finite_data).get())
+    elif module == da:
+        q1_l = da.percentile(finite_data, 25)
+        q2_l = da.percentile(finite_data, 50)
+        q3_l = da.percentile(finite_data, 75)
+        max_l = da.nanmax(data_clean)
+        q1, q2, q3, max_v = dask.compute(q1_l, q2_l, q3_l, max_l)
+        q1, q2, q3, max_v = float(q1), float(q2), float(q3), float(max_v)
+    else:
+        q1 = float(np.percentile(finite_data, 25))
+        q2 = float(np.percentile(finite_data, 50))
+        q3 = float(np.percentile(finite_data, 75))
+        max_v = float(np.nanmax(finite_data))
+
+    iqr = q3 - q1
+    raw_bins = [q1 - hinge * iqr, q1, q2, q3, q3 + hinge * iqr, max_v]
+    bins = np.sort(np.unique(raw_bins))
+    # Remove bins above max (they'd create empty classes)
+    bins = bins[bins <= max_v]
+    if bins[-1] < max_v:
+        bins = np.append(bins, max_v)
+    out = _bin(agg, bins, np.arange(len(bins)))
+    return out
+
+
+def _run_dask_cupy_box_plot(agg, hinge):
+    data = agg.data
+    data_cpu = data.map_blocks(cupy.asnumpy, dtype=data.dtype, meta=np.array(()))
+    data_clean = da.where(da.isinf(data_cpu), np.nan, data_cpu)
+    finite_data = data_clean[da.isfinite(data_clean)]
+
+    q1_l = da.percentile(finite_data, 25)
+    q2_l = da.percentile(finite_data, 50)
+    q3_l = da.percentile(finite_data, 75)
+    max_l = da.nanmax(data_clean)
+    q1, q2, q3, max_v = dask.compute(q1_l, q2_l, q3_l, max_l)
+    q1, q2, q3, max_v = float(q1), float(q2), float(q3), float(max_v)
+
+    iqr = q3 - q1
+    raw_bins = [q1 - hinge * iqr, q1, q2, q3, q3 + hinge * iqr, max_v]
+    bins = np.sort(np.unique(raw_bins))
+    bins = bins[bins <= max_v]
+    if bins[-1] < max_v:
+        bins = np.append(bins, max_v)
+    out = _bin(agg, bins, np.arange(len(bins)))
+    return out
+
+
+def box_plot(agg: xr.DataArray,
+             hinge: float = 1.5,
+             name: Optional[str] = 'box_plot') -> xr.DataArray:
+    """
+    Classify data using box plot breakpoints.
+
+    Uses Q1, median (Q2), Q3, and the whiskers (Q1 - hinge*IQR,
+    Q3 + hinge*IQR) as class boundaries.
+
+    Parameters
+    ----------
+    agg : xarray.DataArray
+        2D NumPy, CuPy, NumPy-backed Dask, or CuPy-backed Dask array
+        of values to be classified.
+    hinge : float, default=1.5
+        Multiplier for the IQR to determine whisker extent.
+    name : str, default='box_plot'
+        Name of output aggregate array.
+
+    Returns
+    -------
+    box_plot_agg : xarray.DataArray, of the same type as `agg`
+        2D aggregate array of box plot classifications.
+        All other input attributes are preserved.
+
+    References
+    ----------
+        - PySAL: https://pysal.org/mapclassify/_modules/mapclassify/classifiers.html#BoxPlot
+    """
+    mapper = ArrayTypeFunctionMapping(
+        numpy_func=lambda *args: _run_box_plot(*args, module=np),
+        dask_func=lambda *args: _run_box_plot(*args, module=da),
+        cupy_func=lambda *args: _run_box_plot(*args, module=cupy),
+        dask_cupy_func=_run_dask_cupy_box_plot,
+    )
+    out = mapper(agg)(agg, hinge)
+    return xr.DataArray(out,
+                        name=name,
+                        dims=agg.dims,
+                        coords=agg.coords,
                         attrs=agg.attrs)

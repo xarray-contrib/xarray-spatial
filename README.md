@@ -135,112 +135,117 @@ In the GIS world, rasters are used for representing continuous phenomena (e.g. e
 
 ### **Classification**
 
-| Name | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
-|:----------:|:----------------------:|:--------------------:|:-------------------:|:------:|
-| [Equal Interval](xrspatial/classify.py) |✅️ |✅ | ✅ | ️ |
-| [Natural Breaks](xrspatial/classify.py) |✅️ |  |  | ️ |
-| [Reclassify](xrspatial/classify.py) |✅️ |✅ | ✅ |✅ |
-| [Quantile](xrspatial/classify.py) |✅️ | ✅ |✅ |  ️|
+| Name | Description | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
+|:----------:|:------------|:----------------------:|:--------------------:|:-------------------:|:------:|
+| [Box Plot](xrspatial/classify.py) | Classifies values into bins based on box plot quartile boundaries | ✅️ |✅ | ✅ |✅ |
+| [Equal Interval](xrspatial/classify.py) | Divides the value range into equal-width bins | ✅️ |✅ | ✅ |✅ |
+| [Head/Tail Breaks](xrspatial/classify.py) | Classifies heavy-tailed distributions using recursive mean splitting | ✅️ |✅ | ✅ |✅ |
+| [Maximum Breaks](xrspatial/classify.py) | Finds natural groupings by maximizing differences between sorted values | ✅️ |✅ | ✅ |✅ |
+| [Natural Breaks](xrspatial/classify.py) | Optimizes class boundaries to minimize within-class variance (Jenks) | ✅️ |✅ | ✅ |✅ |
+| [Percentiles](xrspatial/classify.py) | Assigns classes based on user-defined percentile breakpoints | ✅️ |✅ | ✅ |✅ |
+| [Quantile](xrspatial/classify.py) | Distributes values into classes with equal observation counts | ✅️ |✅ | ✅ |✅ |
+| [Reclassify](xrspatial/classify.py) | Remaps pixel values to new classes using a user-defined lookup | ✅️ |✅ | ✅ |✅ |
+| [Std Mean](xrspatial/classify.py) | Classifies values by standard deviation intervals from the mean | ✅️ |✅ | ✅ |✅ |
 
 -------
 
 ### **Focal**
 
-| Name | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
-|:----------:|:----------------------:|:--------------------:|:-------------------:|:------:|
-| [Apply](xrspatial/focal.py) | ✅️ | ✅️ |  |  |
-| [Hotspots](xrspatial/focal.py) | ✅️ | ✅️ | ✅️ |  |
-| [Mean](xrspatial/focal.py) | ✅️ | ✅️ | ✅️ | |
-| [Focal Statistics](xrspatial/focal.py) | ✅️ | ✅️ | ✅️ | |
+| Name | Description | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
+|:----------:|:------------|:----------------------:|:--------------------:|:-------------------:|:------:|
+| [Apply](xrspatial/focal.py) | Applies a custom function over a sliding neighborhood window | ✅️ | ✅️ |  |  |
+| [Hotspots](xrspatial/focal.py) | Identifies statistically significant spatial clusters using Getis-Ord Gi* | ✅️ | ✅️ | ✅️ |  |
+| [Mean](xrspatial/focal.py) | Computes the mean value within a sliding neighborhood window | ✅️ | ✅️ | ✅️ | |
+| [Focal Statistics](xrspatial/focal.py) | Computes summary statistics over a sliding neighborhood window | ✅️ | ✅️ | ✅️ | |
 
 -------
 
 ### **Multispectral**
 
-| Name | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
-|:----------:|:----------------------:|:--------------------:|:-------------------:|:------:|
-| [Atmospherically Resistant Vegetation Index (ARVI)](xrspatial/multispectral.py) | ✅️ |✅️ | ✅️ |✅️ |
-| [Enhanced Built-Up and Bareness Index (EBBI)](xrspatial/multispectral.py) | ✅️ |✅️  | ✅️ |✅️ |
-| [Enhanced Vegetation Index (EVI)](xrspatial/multispectral.py) | ✅️ |✅️ | ✅️ |✅️ |
-| [Green Chlorophyll Index (GCI)](xrspatial/multispectral.py) | ✅️ |✅️ | ✅️ |✅️ |
-| [Normalized Burn Ratio (NBR)](xrspatial/multispectral.py) | ✅️ |✅️ | ✅️ |✅️ |
-| [Normalized Burn Ratio 2 (NBR2)](xrspatial/multispectral.py) | ✅️ |✅️ | ✅️ |✅️ |
-| [Normalized Difference Moisture Index (NDMI)](xrspatial/multispectral.py) | ✅️ |✅️ | ✅️ |✅️ |
-| [Normalized Difference Vegetation Index (NDVI)](xrspatial/multispectral.py) | ✅️ |✅️ | ✅️ |✅️ |
-| [Soil Adjusted Vegetation Index (SAVI)](xrspatial/multispectral.py) | ✅️ |✅️ | ✅️ |✅️ |
-| [Structure Insensitive Pigment Index (SIPI)](xrspatial/multispectral.py) | ✅️ |✅️ | ✅️ |✅️ |
-| [True Color](xrspatial/multispectral.py) | ✅️ | ️ | ✅️ | ️ |
+| Name | Description | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
+|:----------:|:------------|:----------------------:|:--------------------:|:-------------------:|:------:|
+| [Atmospherically Resistant Vegetation Index (ARVI)](xrspatial/multispectral.py) | Vegetation index resistant to atmospheric effects using blue band correction | ✅️ |✅️ | ✅️ |✅️ |
+| [Enhanced Built-Up and Bareness Index (EBBI)](xrspatial/multispectral.py) | Highlights built-up areas and barren land from thermal and SWIR bands | ✅️ |✅️  | ✅️ |✅️ |
+| [Enhanced Vegetation Index (EVI)](xrspatial/multispectral.py) | Enhanced vegetation index reducing soil and atmospheric noise | ✅️ |✅️ | ✅️ |✅️ |
+| [Green Chlorophyll Index (GCI)](xrspatial/multispectral.py) | Estimates leaf chlorophyll content from green and NIR reflectance | ✅️ |✅️ | ✅️ |✅️ |
+| [Normalized Burn Ratio (NBR)](xrspatial/multispectral.py) | Measures burn severity using NIR and SWIR band difference | ✅️ |✅️ | ✅️ |✅️ |
+| [Normalized Burn Ratio 2 (NBR2)](xrspatial/multispectral.py) | Refines burn severity mapping using two SWIR bands | ✅️ |✅️ | ✅️ |✅️ |
+| [Normalized Difference Moisture Index (NDMI)](xrspatial/multispectral.py) | Detects vegetation moisture stress from NIR and SWIR reflectance | ✅️ |✅️ | ✅️ |✅️ |
+| [Normalized Difference Vegetation Index (NDVI)](xrspatial/multispectral.py) | Quantifies vegetation density from red and NIR band difference | ✅️ |✅️ | ✅️ |✅️ |
+| [Soil Adjusted Vegetation Index (SAVI)](xrspatial/multispectral.py) | Vegetation index with soil brightness correction factor | ✅️ |✅️ | ✅️ |✅️ |
+| [Structure Insensitive Pigment Index (SIPI)](xrspatial/multispectral.py) | Estimates carotenoid-to-chlorophyll ratio for plant stress detection | ✅️ |✅️ | ✅️ |✅️ |
+| [True Color](xrspatial/multispectral.py) | Composites red, green, and blue bands into a natural color image | ✅️ | ️ | ✅️ | ️ |
 
 -------
 
 
 ### **Pathfinding**
 
-| Name | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
-|:----------:|:----------------------:|:--------------------:|:-------------------:|:------:|
-| [A* Pathfinding](xrspatial/pathfinding.py) | ✅️ |  | | |
+| Name | Description | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
+|:----------:|:------------|:----------------------:|:--------------------:|:-------------------:|:------:|
+| [A* Pathfinding](xrspatial/pathfinding.py) | Finds the least-cost path between two cells on a cost surface | ✅️ |  | | |
 
 ----------
 
 ### **Proximity**
 
-| Name | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
-|:----------:|:----------------------:|:--------------------:|:-------------------:|:------:|
-| [Allocation](xrspatial/proximity.py) | ✅️ | ✅ | | |
-| [Direction](xrspatial/proximity.py) | ✅️ | ✅ | | |
-| [Proximity](xrspatial/proximity.py) | ✅️ | ✅ | | |
+| Name | Description | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
+|:----------:|:------------|:----------------------:|:--------------------:|:-------------------:|:------:|
+| [Allocation](xrspatial/proximity.py) | Assigns each cell to the identity of the nearest source feature | ✅️ | ✅ | | |
+| [Direction](xrspatial/proximity.py) | Computes the direction from each cell to the nearest source feature | ✅️ | ✅ | | |
+| [Proximity](xrspatial/proximity.py) | Computes the distance from each cell to the nearest source feature | ✅️ | ✅ | | |
 
 --------
 
 ### **Raster to vector**
 
-| Name | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
-|:-----|:------------------:|:-----------------:|:---------------------:|:---------------------:|
-| [Polygonize](xrspatial/experimental/polygonize.py) | ✅️ | | | |
+| Name | Description | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
+|:-----|:------------|:------------------:|:-----------------:|:---------------------:|:---------------------:|
+| [Polygonize](xrspatial/experimental/polygonize.py) | Converts contiguous regions of equal value into vector polygons | ✅️ | | | |
 
 --------
 
 ### **Surface**
 
-| Name | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
-|:----------:|:----------------------:|:--------------------:|:-------------------:|:------:|
-| [Aspect](xrspatial/aspect.py) | ✅️ | ✅️ | ✅️ | ✅️ |
-| [Curvature](xrspatial/curvature.py) | ✅️ |✅️ |✅️ | ✅️  |
-| [Hillshade](xrspatial/hillshade.py) | ✅️ | ✅️  | | |
-| [Slope](xrspatial/slope.py) | ✅️  | ✅️  | ✅️ | ✅️  |
-| [Terrain Generation](xrspatial/terrain.py) | ✅️ | ✅️ | ✅️ | |
-| [Viewshed](xrspatial/viewshed.py) | ✅️ |  | | |
-| [Perlin Noise](xrspatial/perlin.py) | ✅️ | ✅️ | ✅️ | |
-| [Bump Mapping](xrspatial/bump.py) | ✅️ | | | |
+| Name | Description | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
+|:----------:|:------------|:----------------------:|:--------------------:|:-------------------:|:------:|
+| [Aspect](xrspatial/aspect.py) | Computes downslope direction of each cell in degrees | ✅️ | ✅️ | ✅️ | ✅️ |
+| [Curvature](xrspatial/curvature.py) | Measures rate of slope change (concavity/convexity) at each cell | ✅️ |✅️ |✅️ | ✅️  |
+| [Hillshade](xrspatial/hillshade.py) | Simulates terrain illumination from a given sun angle and azimuth | ✅️ | ✅️  | | |
+| [Slope](xrspatial/slope.py) | Computes terrain gradient steepness at each cell in degrees | ✅️  | ✅️  | ✅️ | ✅️  |
+| [Terrain Generation](xrspatial/terrain.py) | Generates synthetic terrain elevation using fractal noise | ✅️ | ✅️ | ✅️ | |
+| [Viewshed](xrspatial/viewshed.py) | Determines visible cells from a given observer point on terrain | ✅️ |  | | |
+| [Perlin Noise](xrspatial/perlin.py) | Generates smooth continuous random noise for procedural textures | ✅️ | ✅️ | ✅️ | |
+| [Bump Mapping](xrspatial/bump.py) | Adds randomized bump features to simulate natural terrain variation | ✅️ | | | |
 
 -----------
 
 ### **Zonal**
 
-| Name | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
-|:----------:|:----------------------:|:--------------------:|:-------------------:|:------:|
-| [Apply](xrspatial/zonal.py) | ✅️ | ✅️ | | |
-| [Crop](xrspatial/zonal.py) | ✅️ | | | |
-| [Regions](xrspatial/zonal.py) |  |  | | |
-| [Trim](xrspatial/zonal.py) | ✅️ |  | | |
-| [Zonal Statistics](xrspatial/zonal.py) | ✅️ | ✅️| | |
-| [Zonal Cross Tabulate](xrspatial/zonal.py) | ✅️ | ✅️| | |
+| Name | Description | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
+|:----------:|:------------|:----------------------:|:--------------------:|:-------------------:|:------:|
+| [Apply](xrspatial/zonal.py) | Applies a custom function to each zone in a classified raster | ✅️ | ✅️ | | |
+| [Crop](xrspatial/zonal.py) | Extracts the bounding rectangle of a specific zone | ✅️ | | | |
+| [Regions](xrspatial/zonal.py) | Identifies connected regions of non-zero cells | |  | | |
+| [Trim](xrspatial/zonal.py) | Removes nodata border rows and columns from a raster | ✅️ |  | | |
+| [Zonal Statistics](xrspatial/zonal.py) | Computes summary statistics for a value raster within each zone | ✅️ | ✅️| | |
+| [Zonal Cross Tabulate](xrspatial/zonal.py) | Cross-tabulates agreement between two categorical rasters | ✅️ | ✅️| | |
 
 -----------
 
 ### **Local**
 
-| Name | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
-|:----------:|:----------------------:|:--------------------:|:-------------------:|:------:|
-| [Cell Stats](xrspatial/local.py) | ✅️ |  | | |
-| [Combine](xrspatial/local.py) | ✅️ | | | |
-| [Lesser Frequency](xrspatial/local.py) | ✅️ |  | | |
-| [Equal Frequency](xrspatial/local.py) | ✅️ |  | | |
-| [Greater Frequency](xrspatial/local.py) | ✅️ |  | | |
-| [Lowest Position](xrspatial/local.py) | ✅️ | | | |
-| [Highest Position](xrspatial/local.py) | ✅️ | | | |
-| [Popularity](xrspatial/local.py) | ✅️ | | | |
-| [Rank](xrspatial/local.py) | ✅️ | | | |
+| Name | Description | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
+|:----------:|:------------|:----------------------:|:--------------------:|:-------------------:|:------:|
+| [Cell Stats](xrspatial/local.py) | Computes summary statistics across multiple rasters per cell | ✅️ |  | | |
+| [Combine](xrspatial/local.py) | Assigns unique IDs to each distinct combination across rasters | ✅️ | | | |
+| [Lesser Frequency](xrspatial/local.py) | Counts how many rasters have values less than a reference | ✅️ |  | | |
+| [Equal Frequency](xrspatial/local.py) | Counts how many rasters have values equal to a reference | ✅️ |  | | |
+| [Greater Frequency](xrspatial/local.py) | Counts how many rasters have values greater than a reference | ✅️ |  | | |
+| [Lowest Position](xrspatial/local.py) | Identifies which raster has the minimum value at each cell | ✅️ | | | |
+| [Highest Position](xrspatial/local.py) | Identifies which raster has the maximum value at each cell | ✅️ | | | |
+| [Popularity](xrspatial/local.py) | Returns the value from the most common position across rasters | ✅️ | | | |
+| [Rank](xrspatial/local.py) | Ranks cell values across multiple rasters per cell | ✅️ | | | |
 
 #### Usage
 

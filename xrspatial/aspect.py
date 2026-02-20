@@ -15,8 +15,28 @@ import xarray as xr
 from numba import cuda
 
 from xrspatial.utils import ArrayTypeFunctionMapping
+from xrspatial.utils import Z_UNITS
+from xrspatial.utils import _extract_latlon_coords
 from xrspatial.utils import cuda_args
 from xrspatial.utils import ngjit
+
+
+def _geodesic_cuda_dims(shape):
+    """Smaller thread block for register-heavy geodesic kernels."""
+    tpb = (16, 16)
+    bpg = (
+        (shape[0] + tpb[0] - 1) // tpb[0],
+        (shape[1] + tpb[1] - 1) // tpb[1],
+    )
+    return bpg, tpb
+
+from xrspatial.geodesic import (
+    INV_2R,
+    WGS84_A2,
+    WGS84_B2,
+    _cpu_geodesic_aspect,
+    _run_gpu_geodesic_aspect,
+)
 
 # 3rd-party
 try:
@@ -27,6 +47,10 @@ except ImportError:
 
 RADIAN = 180 / np.pi
 
+
+# =====================================================================
+# Planar backend functions (unchanged)
+# =====================================================================
 
 @ngjit
 def _run_numpy(data: np.ndarray):
@@ -140,8 +164,116 @@ def _run_dask_cupy(data: da.Array) -> da.Array:
     return out
 
 
+# =====================================================================
+# Geodesic backend functions
+# =====================================================================
+
+def _run_numpy_geodesic(data, lat_2d, lon_2d, a2, b2, z_factor):
+    stacked = np.stack([
+        data.astype(np.float64),
+        lat_2d,
+        lon_2d,
+    ], axis=0)
+    return _cpu_geodesic_aspect(stacked, a2, b2, z_factor)
+
+
+def _run_cupy_geodesic(data, lat_2d, lon_2d, a2, b2, z_factor):
+    lat_2d_gpu = cupy.asarray(lat_2d, dtype=cupy.float64)
+    lon_2d_gpu = cupy.asarray(lon_2d, dtype=cupy.float64)
+    stacked = cupy.stack([
+        data.astype(cupy.float64),
+        lat_2d_gpu,
+        lon_2d_gpu,
+    ], axis=0)
+
+    H, W = data.shape
+    out = cupy.full((H, W), cupy.nan, dtype=cupy.float32)
+
+    a2_arr = cupy.array([a2], dtype=cupy.float64)
+    b2_arr = cupy.array([b2], dtype=cupy.float64)
+    zf_arr = cupy.array([z_factor], dtype=cupy.float64)
+    inv_2r_arr = cupy.array([INV_2R], dtype=cupy.float64)
+
+    griddim, blockdim = _geodesic_cuda_dims((H, W))
+    _run_gpu_geodesic_aspect[griddim, blockdim](stacked, a2_arr, b2_arr, zf_arr, inv_2r_arr, out)
+    return out
+
+
+def _dask_geodesic_aspect_chunk(stacked_chunk, a2, b2, z_factor):
+    """Returns (3, h, w) to preserve shape for map_overlap."""
+    result_2d = _cpu_geodesic_aspect(stacked_chunk, a2, b2, z_factor)
+    out = np.empty_like(stacked_chunk, dtype=np.float32)
+    out[0] = result_2d
+    out[1] = 0.0
+    out[2] = 0.0
+    return out
+
+
+def _dask_geodesic_aspect_chunk_cupy(stacked_chunk, a2, b2, z_factor):
+    H, W = stacked_chunk.shape[1], stacked_chunk.shape[2]
+    result_2d = cupy.full((H, W), cupy.nan, dtype=cupy.float32)
+
+    a2_arr = cupy.array([a2], dtype=cupy.float64)
+    b2_arr = cupy.array([b2], dtype=cupy.float64)
+    zf_arr = cupy.array([z_factor], dtype=cupy.float64)
+    inv_2r_arr = cupy.array([INV_2R], dtype=cupy.float64)
+
+    griddim, blockdim = _geodesic_cuda_dims((H, W))
+    _run_gpu_geodesic_aspect[griddim, blockdim](stacked_chunk, a2_arr, b2_arr, zf_arr, inv_2r_arr, result_2d)
+
+    out = cupy.zeros_like(stacked_chunk, dtype=cupy.float32)
+    out[0] = result_2d
+    return out
+
+
+def _run_dask_numpy_geodesic(data, lat_2d, lon_2d, a2, b2, z_factor):
+    lat_dask = da.from_array(lat_2d, chunks=data.chunksize)
+    lon_dask = da.from_array(lon_2d, chunks=data.chunksize)
+    stacked = da.stack([
+        data.astype(np.float64),
+        lat_dask,
+        lon_dask,
+    ], axis=0).rechunk({0: 3})
+
+    _func = partial(_dask_geodesic_aspect_chunk, a2=a2, b2=b2, z_factor=z_factor)
+    out = stacked.map_overlap(
+        _func,
+        depth=(0, 1, 1),
+        boundary=np.nan,
+        meta=np.array((), dtype=np.float32),
+    )
+    return out[0]
+
+
+def _run_dask_cupy_geodesic(data, lat_2d, lon_2d, a2, b2, z_factor):
+    lat_dask = da.from_array(cupy.asarray(lat_2d, dtype=cupy.float64),
+                             chunks=data.chunksize)
+    lon_dask = da.from_array(cupy.asarray(lon_2d, dtype=cupy.float64),
+                             chunks=data.chunksize)
+    stacked = da.stack([
+        data.astype(cupy.float64),
+        lat_dask,
+        lon_dask,
+    ], axis=0).rechunk({0: 3})
+
+    _func = partial(_dask_geodesic_aspect_chunk_cupy, a2=a2, b2=b2, z_factor=z_factor)
+    out = stacked.map_overlap(
+        _func,
+        depth=(0, 1, 1),
+        boundary=cupy.nan,
+        meta=cupy.array((), dtype=cupy.float32),
+    )
+    return out[0]
+
+
+# =====================================================================
+# Public API
+# =====================================================================
+
 def aspect(agg: xr.DataArray,
-           name: Optional[str] = 'aspect') -> xr.DataArray:
+           name: Optional[str] = 'aspect',
+           method: str = 'planar',
+           z_unit: str = 'meter') -> xr.DataArray:
     """
     Calculates the aspect value of an elevation aggregate.
 
@@ -169,6 +301,15 @@ def aspect(agg: xr.DataArray,
         of elevation values.
     name : str, default='aspect'
         Name of ouput DataArray.
+    method : str, default='planar'
+        ``'planar'`` uses the classic Horn algorithm with uniform cell size.
+        ``'geodesic'`` converts cells to Earth-Centered Earth-Fixed (ECEF)
+        coordinates and fits a 3D plane, yielding accurate results for
+        geographic (lat/lon) coordinate systems.
+    z_unit : str, default='meter'
+        Unit of the elevation values.  Only used when ``method='geodesic'``.
+        Accepted values: ``'meter'``, ``'foot'``, ``'kilometer'``, ``'mile'``
+        (and common aliases).
 
     Returns
     -------
@@ -198,81 +339,40 @@ def aspect(agg: xr.DataArray,
             [1, 5, 0, 5, 5]
         ], dtype=np.float32)
         >>> raster = xr.DataArray(data, dims=['y', 'x'], name='raster')
-        >>> print(raster)
-        <xarray.DataArray 'raster' (y: 6, x: 5)>
-        array([[1., 1., 1., 1., 1.],
-               [1., 1., 1., 2., 0.],
-               [1., 1., 1., 0., 0.],
-               [4., 4., 9., 2., 4.],
-               [1., 5., 0., 1., 4.],
-               [1., 5., 0., 5., 5.]])
-        Dimensions without coordinates: y, x
         >>> aspect_agg = aspect(raster)
-        >>> print(aspect_agg)
-        <xarray.DataArray 'aspect' (y: 6, x: 5)>
-        array([[ nan,  nan        ,   nan       ,   nan       , nan],
-               [ nan,  -1.        ,   225.      ,   135.      , nan],
-               [ nan, 343.61045967,   8.97262661,  33.69006753, nan],
-               [ nan, 307.87498365,  71.56505118,  54.46232221, nan],
-               [ nan, 191.30993247, 144.46232221, 255.96375653, nan],
-               [ nan,  nan        ,   nan       ,   nan       , nan]])
-        Dimensions without coordinates: y, x
-
-    Aspect works with Dask with NumPy backed xarray DataArray
-    .. sourcecode:: python
-
-        >>> import dask.array as da
-        >>> data_da = da.from_array(data, chunks=(3, 3))
-        >>> raster_da = xr.DataArray(data_da, dims=['y', 'x'], name='raster_da')
-        >>> print(raster_da)
-        <xarray.DataArray 'raster' (y: 6, x: 5)>
-        dask.array<array, shape=(6, 5), dtype=int64, chunksize=(3, 3), chunktype=numpy.ndarray>
-        Dimensions without coordinates: y, x
-        >>> aspect_da = aspect(raster_da)
-        >>> print(aspect_da)
-        <xarray.DataArray 'aspect' (y: 6, x: 5)>
-        dask.array<_trim, shape=(6, 5), dtype=float32, chunksize=(3, 3), chunktype=numpy.ndarray>
-        Dimensions without coordinates: y, x
-        >>> print(aspect_da.compute())  # compute the results
-        <xarray.DataArray 'aspect' (y: 6, x: 5)>
-        array([[ nan,  nan        ,   nan       ,   nan       , nan],
-               [ nan,  -1.        ,   225.      ,   135.      , nan],
-               [ nan, 343.61045967,   8.97262661,  33.69006753, nan],
-               [ nan, 307.87498365,  71.56505118,  54.46232221, nan],
-               [ nan, 191.30993247, 144.46232221, 255.96375653, nan],
-               [ nan,  nan        ,   nan       ,   nan       , nan]])
-        Dimensions without coordinates: y, x
-
-    Aspect works with CuPy backed xarray DataArray.
-    Make sure you have a GPU and CuPy installed to run this example.
-    .. sourcecode:: python
-
-        >>> import cupy
-        >>> data_cupy = cupy.asarray(data)
-        >>> raster_cupy = xr.DataArray(data_cupy, dims=['y', 'x'])
-        >>> aspect_cupy = aspect(raster_cupy)
-        >>> print(type(aspect_cupy.data))
-        <class 'cupy.core.core.ndarray'>
-        >>> print(aspect_cupy)
-        <xarray.DataArray 'aspect' (y: 6, x: 5)>
-        array([[       nan,       nan,        nan,        nan,        nan],
-               [       nan,       -1.,       225.,       135.,        nan],
-               [       nan, 343.61047,   8.972626,  33.690067,        nan],
-               [       nan, 307.87497,  71.56505 ,  54.462322,        nan],
-               [       nan, 191.30994, 144.46233 ,  255.96376,        nan],
-               [       nan,       nan,        nan,        nan,        nan]],
-              dtype=float32)
-        Dimensions without coordinates: y, x
     """
 
-    mapper = ArrayTypeFunctionMapping(
-        numpy_func=_run_numpy,
-        dask_func=_run_dask_numpy,
-        cupy_func=_run_cupy,
-        dask_cupy_func=_run_dask_cupy,
-    )
+    if method not in ('planar', 'geodesic'):
+        raise ValueError(
+            f"method must be 'planar' or 'geodesic', got {method!r}"
+        )
 
-    out = mapper(agg)(agg.data)
+    if method == 'planar':
+        mapper = ArrayTypeFunctionMapping(
+            numpy_func=_run_numpy,
+            dask_func=_run_dask_numpy,
+            cupy_func=_run_cupy,
+            dask_cupy_func=_run_dask_cupy,
+        )
+        out = mapper(agg)(agg.data)
+
+    else:  # geodesic
+        if z_unit not in Z_UNITS:
+            raise ValueError(
+                f"z_unit must be one of {sorted(set(Z_UNITS.values()), key=str)}, "
+                f"got {z_unit!r}"
+            )
+        z_factor = Z_UNITS[z_unit]
+
+        lat_2d, lon_2d = _extract_latlon_coords(agg)
+
+        mapper = ArrayTypeFunctionMapping(
+            numpy_func=_run_numpy_geodesic,
+            cupy_func=_run_cupy_geodesic,
+            dask_func=_run_dask_numpy_geodesic,
+            dask_cupy_func=_run_dask_cupy_geodesic,
+        )
+        out = mapper(agg)(agg.data, lat_2d, lon_2d, WGS84_A2, WGS84_B2, z_factor)
 
     return xr.DataArray(out,
                         name=name,
