@@ -25,6 +25,7 @@ from xrspatial.utils import ArrayTypeFunctionMapping
 from xrspatial.utils import cuda_args
 from xrspatial.utils import get_dataarray_resolution
 from xrspatial.utils import ngjit
+from xrspatial.dataset_support import supports_dataset
 
 
 @ngjit
@@ -107,6 +108,7 @@ def _run_dask_cupy(data: da.Array,
     return out
 
 
+@supports_dataset
 def curvature(agg: xr.DataArray,
               name: Optional[str] = 'curvature') -> xr.DataArray:
     """

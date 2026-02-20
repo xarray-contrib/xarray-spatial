@@ -29,6 +29,7 @@ except ImportError:
 
 from xrspatial.convolution import convolve_2d, custom_kernel
 from xrspatial.utils import ArrayTypeFunctionMapping, cuda_args, ngjit, not_implemented_func
+from xrspatial.dataset_support import supports_dataset
 
 # TODO: Make convolution more generic with numba first-class functions.
 
@@ -158,6 +159,7 @@ def _mean(data, excludes):
     return out
 
 
+@supports_dataset
 def mean(agg, passes=1, excludes=[np.nan], name='mean'):
     """
     Returns Mean filtered array using a 3x3 window.

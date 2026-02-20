@@ -14,6 +14,7 @@ from numba import cuda
 
 from .gpu_rtx import has_rtx
 from .utils import calc_cuda_dims, has_cuda_and_cupy, is_cupy_array, is_cupy_backed
+from .dataset_support import supports_dataset
 
 
 def _run_numpy(data, azimuth=225, angle_altitude=25):
@@ -99,6 +100,7 @@ def _run_cupy(d_data, azimuth, angle_altitude):
     return output
 
 
+@supports_dataset
 def hillshade(agg: xr.DataArray,
               azimuth: int = 225,
               angle_altitude: int = 25,

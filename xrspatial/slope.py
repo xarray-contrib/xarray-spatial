@@ -28,6 +28,7 @@ from xrspatial.utils import _extract_latlon_coords
 from xrspatial.utils import cuda_args
 from xrspatial.utils import get_dataarray_resolution
 from xrspatial.utils import ngjit
+from xrspatial.dataset_support import supports_dataset
 
 
 def _geodesic_cuda_dims(shape):
@@ -267,6 +268,7 @@ def _run_dask_cupy_geodesic(data, lat_2d, lon_2d, a2, b2, z_factor):
 # Public API
 # =====================================================================
 
+@supports_dataset
 def slope(agg: xr.DataArray,
           name: str = 'slope',
           method: str = 'planar',

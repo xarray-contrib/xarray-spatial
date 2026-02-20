@@ -25,6 +25,7 @@ import numba as nb
 import numpy as np
 
 from xrspatial.utils import ArrayTypeFunctionMapping, cuda_args, ngjit, not_implemented_func
+from xrspatial.dataset_support import supports_dataset
 
 
 @ngjit
@@ -83,6 +84,7 @@ def _run_dask_cupy_binary(data, values_cupy):
     return out
 
 
+@supports_dataset
 def binary(agg, values, name='binary'):
     """
     Binarize a data array based on a set of values. Data that equals to a value in the set will be
@@ -266,6 +268,7 @@ def _bin(agg, bins, new_values):
     return out
 
 
+@supports_dataset
 def reclassify(agg: xr.DataArray,
                bins: List[int],
                new_values: List[int],
@@ -416,6 +419,7 @@ def _quantile(agg, k):
     return out
 
 
+@supports_dataset
 def quantile(agg: xr.DataArray,
              k: int = 4,
              name: Optional[str] = 'quantile') -> xr.DataArray:
@@ -723,6 +727,7 @@ def _run_dask_cupy_natural_break(agg, num_sample, k):
     return out
 
 
+@supports_dataset
 def natural_breaks(agg: xr.DataArray,
                    num_sample: Optional[int] = 20000,
                    name: Optional[str] = 'natural_breaks',
@@ -854,6 +859,7 @@ def _run_equal_interval(agg, k, module):
     return out
 
 
+@supports_dataset
 def equal_interval(agg: xr.DataArray,
                    k: int = 5,
                    name: Optional[str] = 'equal_interval') -> xr.DataArray:
@@ -952,6 +958,7 @@ def _run_std_mean(agg, module):
     return out
 
 
+@supports_dataset
 def std_mean(agg: xr.DataArray,
              name: Optional[str] = 'std_mean') -> xr.DataArray:
     """
@@ -1044,6 +1051,7 @@ def _run_dask_head_tail_breaks(agg):
     return out
 
 
+@supports_dataset
 def head_tail_breaks(agg: xr.DataArray,
                      name: Optional[str] = 'head_tail_breaks') -> xr.DataArray:
     """
@@ -1096,6 +1104,7 @@ def _run_dask_cupy_percentiles(data, pct):
     return _run_percentiles(data_cpu, pct, da)
 
 
+@supports_dataset
 def percentiles(agg: xr.DataArray,
                 pct: Optional[List] = None,
                 name: Optional[str] = 'percentiles') -> xr.DataArray:
@@ -1212,6 +1221,7 @@ def _run_dask_cupy_maximum_breaks(agg, k):
     return out
 
 
+@supports_dataset
 def maximum_breaks(agg: xr.DataArray,
                    k: int = 5,
                    name: Optional[str] = 'maximum_breaks') -> xr.DataArray:
@@ -1312,6 +1322,7 @@ def _run_dask_cupy_box_plot(agg, hinge):
     return out
 
 
+@supports_dataset
 def box_plot(agg: xr.DataArray,
              hinge: float = 1.5,
              name: Optional[str] = 'box_plot') -> xr.DataArray:

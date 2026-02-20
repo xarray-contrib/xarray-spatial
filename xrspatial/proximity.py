@@ -10,6 +10,7 @@ import xarray as xr
 from numba import prange
 
 from xrspatial.utils import get_dataarray_resolution, ngjit
+from xrspatial.dataset_support import supports_dataset
 
 EUCLIDEAN = 0
 GREAT_CIRCLE = 1
@@ -648,6 +649,7 @@ def _process(
 
 # ported from
 # https://github.com/OSGeo/gdal/blob/master/gdal/alg/gdalproximity.cpp
+@supports_dataset
 def proximity(
     raster: xr.DataArray,
     x: str = "x",
@@ -783,6 +785,7 @@ def proximity(
     return result
 
 
+@supports_dataset
 def allocation(
     raster: xr.DataArray,
     x: str = "x",
@@ -915,6 +918,7 @@ def allocation(
     return result
 
 
+@supports_dataset
 def direction(
     raster: xr.DataArray,
     x: str = "x",

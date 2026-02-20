@@ -11,6 +11,7 @@ from xarray import DataArray
 
 from xrspatial.utils import (ArrayTypeFunctionMapping, cuda_args, ngjit, not_implemented_func,
                              validate_arrays)
+from xrspatial.dataset_support import supports_dataset_bands
 
 # 3rd-party
 try:
@@ -75,6 +76,7 @@ def _arvi_dask_cupy(nir_data, red_data, blue_data):
     return out
 
 
+@supports_dataset_bands(nir='nir_agg', red='red_agg', blue='blue_agg')
 def arvi(nir_agg: xr.DataArray,
          red_agg: xr.DataArray,
          blue_agg: xr.DataArray,
@@ -215,6 +217,7 @@ def _evi_dask_cupy(nir_data, red_data, blue_data, c1, c2, soil_factor, gain):
     return out
 
 
+@supports_dataset_bands(nir='nir_agg', red='red_agg', blue='blue_agg')
 def evi(nir_agg: xr.DataArray,
         red_agg: xr.DataArray,
         blue_agg: xr.DataArray,
@@ -374,6 +377,7 @@ def _gci_dask_cupy(nir_data, green_data):
     return out
 
 
+@supports_dataset_bands(nir='nir_agg', green='green_agg')
 def gci(nir_agg: xr.DataArray,
         green_agg: xr.DataArray,
         name='gci'):
@@ -451,6 +455,7 @@ def gci(nir_agg: xr.DataArray,
 
 
 # NBR ----------
+@supports_dataset_bands(nir='nir_agg', swir2='swir2_agg')
 def nbr(nir_agg: xr.DataArray,
         swir2_agg: xr.DataArray,
         name='nbr'):
@@ -529,6 +534,7 @@ def nbr(nir_agg: xr.DataArray,
                      attrs=nir_agg.attrs)
 
 
+@supports_dataset_bands(swir1='swir1_agg', swir2='swir2_agg')
 def nbr2(swir1_agg: xr.DataArray,
          swir2_agg: xr.DataArray,
          name='nbr2'):
@@ -614,6 +620,7 @@ def nbr2(swir1_agg: xr.DataArray,
 
 
 # NDVI ----------
+@supports_dataset_bands(nir='nir_agg', red='red_agg')
 def ndvi(nir_agg: xr.DataArray,
          red_agg: xr.DataArray,
          name='ndvi'):
@@ -691,6 +698,7 @@ def ndvi(nir_agg: xr.DataArray,
 
 
 # NDMI ----------
+@supports_dataset_bands(nir='nir_agg', swir1='swir1_agg')
 def ndmi(nir_agg: xr.DataArray,
          swir1_agg: xr.DataArray,
          name='ndmi'):
@@ -874,6 +882,7 @@ def _savi_dask_cupy(nir_data, red_data, soil_factor):
 
 
 # SAVI ----------
+@supports_dataset_bands(nir='nir_agg', red='red_agg')
 def savi(nir_agg: xr.DataArray,
          red_agg: xr.DataArray,
          soil_factor: float = 1.0,
@@ -1006,6 +1015,7 @@ def _sipi_dask_cupy(nir_data, red_data, blue_data):
     return out
 
 
+@supports_dataset_bands(nir='nir_agg', red='red_agg', blue='blue_agg')
 def sipi(nir_agg: xr.DataArray,
          red_agg: xr.DataArray,
          blue_agg: xr.DataArray,
@@ -1142,6 +1152,7 @@ def _ebbi_dask_cupy(red_data, swir_data, tir_data):
     return out
 
 
+@supports_dataset_bands(red='red_agg', swir='swir_agg', tir='tir_agg')
 def ebbi(red_agg: xr.DataArray,
          swir_agg: xr.DataArray,
          tir_agg: xr.DataArray,
