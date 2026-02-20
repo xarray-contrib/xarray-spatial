@@ -1170,7 +1170,7 @@ def _compute_maximum_break_bins(values_np, k):
         return uv
     diffs = np.diff(uv)
     n_gaps = min(k - 1, len(diffs))
-    top_indices = np.argpartition(diffs, -n_gaps)[-n_gaps:]
+    top_indices = np.argsort(diffs, kind='stable')[-n_gaps:]
     top_indices.sort()
     bins = np.array([(uv[i] + uv[i + 1]) / 2.0 for i in top_indices])
     bins = np.append(bins, float(uv[-1]))
