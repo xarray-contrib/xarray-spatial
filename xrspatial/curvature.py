@@ -123,15 +123,20 @@ def curvature(agg: xr.DataArray,
 
     Parameters
     ----------
-    agg : xarray.DataArray
+    agg : xarray.DataArray or xr.Dataset
         2D NumPy, CuPy, NumPy-backed Dask xarray DataArray of elevation values.
         Must contain `res` attribute.
+        If a Dataset is passed, the operation is applied to each
+        data variable independently.
     name : str, default='curvature'
         Name of output DataArray.
 
     Returns
     -------
-    curvature_agg : xarray.DataArray, of the same type as `agg`
+    curvature_agg : xarray.DataArray or xr.Dataset
+        If `agg` is a DataArray, returns a DataArray of the same type.
+        If `agg` is a Dataset, returns a Dataset with curvature computed
+        for each data variable.
         2D aggregate array of curvature values.
         All other input attributes are preserved.
 

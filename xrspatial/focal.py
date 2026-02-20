@@ -167,8 +167,10 @@ def mean(agg, passes=1, excludes=[np.nan], name='mean'):
 
     Parameters
     ----------
-    agg : xarray.DataArray
+    agg : xarray.DataArray or xr.Dataset
         2D array of input values to be filtered.
+        If a Dataset is passed, the operation is applied to each
+        data variable independently.
     passes : int, default=1
         Number of times to run mean.
     name : str, default='mean'
@@ -176,7 +178,10 @@ def mean(agg, passes=1, excludes=[np.nan], name='mean'):
 
     Returns
     -------
-    mean_agg : xarray.DataArray of same type as `agg`
+    mean_agg : xarray.DataArray or xr.Dataset
+        If `agg` is a DataArray, returns a DataArray of the same type.
+        If `agg` is a Dataset, returns a Dataset with mean computed
+        for each data variable.
         2D aggregate array of filtered values.
 
     Examples

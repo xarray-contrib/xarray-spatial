@@ -455,12 +455,15 @@ def stats(
         the shape, values, and locations of the zones. An integer field
         in the input `zones` DataArray defines a zone.
 
-    values : xr.DataArray
+    values : xr.DataArray or xr.Dataset
         values is a 2D xarray DataArray of numeric values (integers or floats).
         The input `values` raster contains the input values used in
         calculating the output statistic for each zone. In dask case,
         the chunksizes of `zones` and `values` should be matching. If not,
         `values` will be rechunked to be the same as of `zones`.
+        When a Dataset is passed, stats are computed for each variable
+        and columns are prefixed with the variable name
+        (e.g. ``elevation_mean``).
 
     zone_ids : list of ints, or floats
         List of zones to be included in calculation. If no zone_ids provided,
@@ -492,6 +495,10 @@ def stats(
     stats_df : Union[pandas.DataFrame, dask.dataframe.DataFrame]
         A pandas DataFrame, or a dask DataFrame where each column
         is a statistic and each row is a zone with zone id.
+        When ``values`` is a Dataset, the returned DataFrame has
+        columns prefixed by the variable name (e.g. ``elevation_mean``,
+        ``elevation_max``), and ``return_type`` must be
+        ``'pandas.DataFrame'``.
 
     Examples
     --------

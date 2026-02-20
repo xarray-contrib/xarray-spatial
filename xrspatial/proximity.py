@@ -684,8 +684,10 @@ def proximity(
 
     Parameters
     ----------
-    raster : xr.DataArray
+    raster : xr.DataArray or xr.Dataset
         2D array image with `raster.shape` = (height, width).
+        If a Dataset is passed, the function is applied to each
+        data variable independently, returning a Dataset.
 
     x : str, default='x'
         Name of x-coordinates.
@@ -724,7 +726,10 @@ def proximity(
 
     Returns
     -------
-    proximity_agg: xr.DataArray of same type as `raster`
+    xr.DataArray or xr.Dataset
+        If ``raster`` is a DataArray, returns a DataArray.
+        If ``raster`` is a Dataset, returns a Dataset with each
+        variable processed independently.
         2D array of proximity values.
         All other input attributes are preserved.
 
@@ -819,8 +824,10 @@ def allocation(
 
     Parameters
     ----------
-    raster : xr.DataArray
+    raster : xr.DataArray or xr.Dataset
         2D array of target data.
+        If a Dataset is passed, the function is applied to each
+        data variable independently, returning a Dataset.
 
     x : str, default='x'
         Name of x-coordinates.
@@ -858,7 +865,10 @@ def allocation(
 
     Returns
     -------
-    allocation_agg: xr.DataArray of same type as `raster`
+    xr.DataArray or xr.Dataset
+        If ``raster`` is a DataArray, returns a DataArray.
+        If ``raster`` is a Dataset, returns a Dataset with each
+        variable processed independently.
         2D array of allocation values.
         All other input attributes are preserved.
 
@@ -956,8 +966,10 @@ def direction(
 
     Parameters
     ----------
-    raster : xr.DataArray
+    raster : xr.DataArray or xr.Dataset
         2D array image with `raster.shape` = (height, width).
+        If a Dataset is passed, the function is applied to each
+        data variable independently, returning a Dataset.
 
     x : str, default='x'
         Name of x-coordinates.
@@ -996,7 +1008,10 @@ def direction(
 
     Returns
     -------
-    direction_agg: xr.DataArray of same type as `raster`
+    xr.DataArray or xr.Dataset
+        If ``raster`` is a DataArray, returns a DataArray.
+        If ``raster`` is a Dataset, returns a Dataset with each
+        variable processed independently.
         2D array of direction values.
         All other input attributes are preserved.
 

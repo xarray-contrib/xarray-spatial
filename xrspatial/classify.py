@@ -93,7 +93,7 @@ def binary(agg, values, name='binary'):
 
     Parameters
     ----------
-    agg : xarray.DataArray
+    agg : xr.DataArray or xr.Dataset
         2D NumPy, CuPy, NumPy-backed Dask, or Cupy-backed Dask array
         of values to be reclassified.
     values : array-like object
@@ -103,9 +103,11 @@ def binary(agg, values, name='binary'):
 
     Returns
     -------
-    binarized_agg : xarray.DataArray, of the same type as `agg`
+    binarized_agg : xr.DataArray or xr.Dataset
         2D aggregate array of binarized data array.
         All other input attributes are preserved.
+        If `agg` is a Dataset, returns a Dataset with each variable
+        classified independently.
 
     Examples
     --------
@@ -279,7 +281,7 @@ def reclassify(agg: xr.DataArray,
 
     Parameters
     ----------
-    agg : xarray.DataArray
+    agg : xr.DataArray or xr.Dataset
         2D NumPy, CuPy, NumPy-backed Dask, or Cupy-backed Dask array
         of values to be reclassified.
     bins : array-like object
@@ -291,9 +293,11 @@ def reclassify(agg: xr.DataArray,
 
     Returns
     -------
-    reclass_agg : xarray.DataArray, of the same type as `agg`
+    reclass_agg : xr.DataArray or xr.Dataset
         2D aggregate array of reclassified allocations.
         All other input attributes are preserved.
+        If `agg` is a Dataset, returns a Dataset with each variable
+        classified independently.
 
     References
     ----------
@@ -429,7 +433,7 @@ def quantile(agg: xr.DataArray,
 
     Parameters
     ----------
-    agg : xarray.DataArray
+    agg : xr.DataArray or xr.Dataset
         2D NumPy, CuPy, NumPy-backed Dask, or Cupy-backed Dask array
         of values to be reclassified.
     k : int, default=4
@@ -439,9 +443,11 @@ def quantile(agg: xr.DataArray,
 
     Returns
     -------
-    quantile_agg : xarray.DataArray, of the same type as `agg`
+    quantile_agg : xr.DataArray or xr.Dataset
         2D aggregate array, of quantile allocations.
         All other input attributes are preserved.
+        If `agg` is a Dataset, returns a Dataset with each variable
+        classified independently.
 
     Notes
     -----
@@ -740,7 +746,7 @@ def natural_breaks(agg: xr.DataArray,
 
     Parameters
     ----------
-    agg : xarray.DataArray
+    agg : xr.DataArray or xr.Dataset
         2D NumPy, CuPy, NumPy-backed Dask, or CuPy-backed Dask array
         of values to be reclassified.
     num_sample : int, default=20000
@@ -756,9 +762,11 @@ def natural_breaks(agg: xr.DataArray,
 
     Returns
     -------
-    natural_breaks_agg : xarray.DataArray of the same type as `agg`
+    natural_breaks_agg : xr.DataArray or xr.Dataset
         2D aggregate array of natural break allocations.
         All other input attributes are preserved.
+        If `agg` is a Dataset, returns a Dataset with each variable
+        classified independently.
 
     References
     ----------
@@ -869,7 +877,7 @@ def equal_interval(agg: xr.DataArray,
 
     Parameters
     ----------
-    agg : xarray.DataArray
+    agg : xr.DataArray or xr.Dataset
         2D NumPy, CuPy, NumPy-backed Dask, or Cupy-backed Dask array
         of values to be reclassified.
     k : int, default=5
@@ -879,9 +887,11 @@ def equal_interval(agg: xr.DataArray,
 
     Returns
     -------
-    equal_interval_agg : xarray.DataArray of the same type as `agg`
+    equal_interval_agg : xr.DataArray or xr.Dataset
         2D aggregate array of equal interval allocations.
         All other input attributes are preserved.
+        If `agg` is a Dataset, returns a Dataset with each variable
+        classified independently.
 
     References
     ----------
@@ -968,7 +978,7 @@ def std_mean(agg: xr.DataArray,
 
     Parameters
     ----------
-    agg : xarray.DataArray
+    agg : xr.DataArray or xr.Dataset
         2D NumPy, CuPy, NumPy-backed Dask, or CuPy-backed Dask array
         of values to be classified.
     name : str, default='std_mean'
@@ -976,9 +986,11 @@ def std_mean(agg: xr.DataArray,
 
     Returns
     -------
-    std_mean_agg : xarray.DataArray, of the same type as `agg`
+    std_mean_agg : xr.DataArray or xr.Dataset
         2D aggregate array of standard deviation classifications.
         All other input attributes are preserved.
+        If `agg` is a Dataset, returns a Dataset with each variable
+        classified independently.
 
     References
     ----------
@@ -1063,7 +1075,7 @@ def head_tail_breaks(agg: xr.DataArray,
 
     Parameters
     ----------
-    agg : xarray.DataArray
+    agg : xr.DataArray or xr.Dataset
         2D NumPy, CuPy, NumPy-backed Dask, or CuPy-backed Dask array
         of values to be classified.
     name : str, default='head_tail_breaks'
@@ -1071,9 +1083,11 @@ def head_tail_breaks(agg: xr.DataArray,
 
     Returns
     -------
-    head_tail_agg : xarray.DataArray, of the same type as `agg`
+    head_tail_agg : xr.DataArray or xr.Dataset
         2D aggregate array of head/tail break classifications.
         All other input attributes are preserved.
+        If `agg` is a Dataset, returns a Dataset with each variable
+        classified independently.
 
     References
     ----------
@@ -1113,7 +1127,7 @@ def percentiles(agg: xr.DataArray,
 
     Parameters
     ----------
-    agg : xarray.DataArray
+    agg : xr.DataArray or xr.Dataset
         2D NumPy, CuPy, NumPy-backed Dask, or CuPy-backed Dask array
         of values to be classified.
     pct : list of float, default=[1, 10, 50, 90, 99]
@@ -1123,9 +1137,11 @@ def percentiles(agg: xr.DataArray,
 
     Returns
     -------
-    percentiles_agg : xarray.DataArray, of the same type as `agg`
+    percentiles_agg : xr.DataArray or xr.Dataset
         2D aggregate array of percentile classifications.
         All other input attributes are preserved.
+        If `agg` is a Dataset, returns a Dataset with each variable
+        classified independently.
 
     References
     ----------
@@ -1233,7 +1249,7 @@ def maximum_breaks(agg: xr.DataArray,
 
     Parameters
     ----------
-    agg : xarray.DataArray
+    agg : xr.DataArray or xr.Dataset
         2D NumPy, CuPy, NumPy-backed Dask, or CuPy-backed Dask array
         of values to be classified.
     k : int, default=5
@@ -1243,9 +1259,11 @@ def maximum_breaks(agg: xr.DataArray,
 
     Returns
     -------
-    max_breaks_agg : xarray.DataArray, of the same type as `agg`
+    max_breaks_agg : xr.DataArray or xr.Dataset
         2D aggregate array of maximum break classifications.
         All other input attributes are preserved.
+        If `agg` is a Dataset, returns a Dataset with each variable
+        classified independently.
 
     References
     ----------
@@ -1334,7 +1352,7 @@ def box_plot(agg: xr.DataArray,
 
     Parameters
     ----------
-    agg : xarray.DataArray
+    agg : xr.DataArray or xr.Dataset
         2D NumPy, CuPy, NumPy-backed Dask, or CuPy-backed Dask array
         of values to be classified.
     hinge : float, default=1.5
@@ -1344,9 +1362,11 @@ def box_plot(agg: xr.DataArray,
 
     Returns
     -------
-    box_plot_agg : xarray.DataArray, of the same type as `agg`
+    box_plot_agg : xr.DataArray or xr.Dataset
         2D aggregate array of box plot classifications.
         All other input attributes are preserved.
+        If `agg` is a Dataset, returns a Dataset with each variable
+        classified independently.
 
     References
     ----------

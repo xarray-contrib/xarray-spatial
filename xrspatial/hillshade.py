@@ -113,9 +113,11 @@ def hillshade(agg: xr.DataArray,
 
     Parameters
     ----------
-    agg : xarray.DataArray
+    agg : xarray.DataArray or xr.Dataset
         2D NumPy, CuPy, NumPy-backed Dask, or Cupy-backed Dask array
         of elevation values.
+        If a Dataset is passed, the operation is applied to each
+        data variable independently.
     angle_altitude : int, default=25
         Altitude angle of the sun specified in degrees.
     azimuth : int, default=225
@@ -131,7 +133,10 @@ def hillshade(agg: xr.DataArray,
 
     Returns
     -------
-    hillshade_agg : xarray.DataArray, of same type as `agg`
+    hillshade_agg : xarray.DataArray or xr.Dataset
+        If `agg` is a DataArray, returns a DataArray of the same type.
+        If `agg` is a Dataset, returns a Dataset with hillshade computed
+        for each data variable.
         2D aggregate array of illumination values.
 
     References

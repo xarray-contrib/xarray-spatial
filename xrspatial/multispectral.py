@@ -97,6 +97,12 @@ def arvi(nir_agg: xr.DataArray,
     name : str, default='arvi'
         Name of output DataArray.
 
+    Alternatively, a single ``xr.Dataset`` may be passed as the first
+    argument with keyword arguments mapping band names to Dataset
+    variables. For example::
+
+        arvi(ds, nir='B8', red='B4', blue='B2')
+
     Returns
     -------
     arvi_agg : xarray.DataArray of the same type as inputs.
@@ -250,6 +256,12 @@ def evi(nir_agg: xr.DataArray,
     name : str, default='evi'
         Name of output DataArray.
 
+    Alternatively, a single ``xr.Dataset`` may be passed as the first
+    argument with keyword arguments mapping band names to Dataset
+    variables. For example::
+
+        evi(ds, nir='B8', red='B4', blue='B2')
+
     Returns
     -------
     evi_agg : xarray.DataArray of same type as inputs
@@ -395,6 +407,12 @@ def gci(nir_agg: xr.DataArray,
     name : str, default='gci'
         Name of output DataArray.
 
+    Alternatively, a single ``xr.Dataset`` may be passed as the first
+    argument with keyword arguments mapping band names to Dataset
+    variables. For example::
+
+        gci(ds, nir='B8', green='B3')
+
     Returns
     -------
     gci_agg : xarray.DataArray of the same type as inputs
@@ -473,6 +491,12 @@ def nbr(nir_agg: xr.DataArray,
         (Landsat 8: Band 7)
     name : str, default='nbr'
         Name of output DataArray.
+
+    Alternatively, a single ``xr.Dataset`` may be passed as the first
+    argument with keyword arguments mapping band names to Dataset
+    variables. For example::
+
+        nbr(ds, nir='B8', swir2='B12')
 
     Returns
     -------
@@ -558,6 +582,12 @@ def nbr2(swir1_agg: xr.DataArray,
     name : str default='nbr2'
         Name of output DataArray.
 
+    Alternatively, a single ``xr.Dataset`` may be passed as the first
+    argument with keyword arguments mapping band names to Dataset
+    variables. For example::
+
+        nbr2(ds, swir1='B11', swir2='B12')
+
     Returns
     -------
     nbr2_agg : xr.DataArray of same type as inputs.
@@ -636,6 +666,12 @@ def ndvi(nir_agg: xr.DataArray,
         2D array red band data.
     name : str default='ndvi'
         Name of output DataArray.
+
+    Alternatively, a single ``xr.Dataset`` may be passed as the first
+    argument with keyword arguments mapping band names to Dataset
+    variables. For example::
+
+        ndvi(ds, nir='B8', red='B4')
 
     Returns
     -------
@@ -718,6 +754,12 @@ def ndmi(nir_agg: xr.DataArray,
         (Landsat 8: Band 6)
     name: str, default='ndmi'
         Name of output DataArray.
+
+    Alternatively, a single ``xr.Dataset`` may be passed as the first
+    argument with keyword arguments mapping band names to Dataset
+    variables. For example::
+
+        ndmi(ds, nir='B8', swir1='B11')
 
     Returns
     -------
@@ -904,6 +946,12 @@ def savi(nir_agg: xr.DataArray,
     name : str, default='savi'
         Name of output DataArray.
 
+    Alternatively, a single ``xr.Dataset`` may be passed as the first
+    argument with keyword arguments mapping band names to Dataset
+    variables. For example::
+
+        savi(ds, nir='B8', red='B4')
+
     Returns
     -------
     savi_agg : xr.DataArray of same type as inputs
@@ -1034,6 +1082,12 @@ def sipi(nir_agg: xr.DataArray,
         2D array of blue band data.
     name: str, default='sipi'
         Name of output DataArray.
+
+    Alternatively, a single ``xr.Dataset`` may be passed as the first
+    argument with keyword arguments mapping band names to Dataset
+    variables. For example::
+
+        sipi(ds, nir='B8', red='B4', blue='B2')
 
     Returns
     -------
@@ -1171,6 +1225,12 @@ def ebbi(red_agg: xr.DataArray,
         2D array of thermal infrared band data.
     name: str, default='ebbi'
         Name of output DataArray.
+
+    Alternatively, a single ``xr.Dataset`` may be passed as the first
+    argument with keyword arguments mapping band names to Dataset
+    variables. For example::
+
+        ebbi(ds, red='B4', swir='B11', tir='B10')
 
     Returns
     -------
