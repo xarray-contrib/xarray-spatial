@@ -258,6 +258,21 @@ my_dataarray = xr.DataArray(...)
 hillshaded_dataarray = hillshade(my_dataarray)
 ```
 
+##### Dataset Support
+
+Most functions also accept an `xr.Dataset`. Single-input functions (surface, classification, focal, proximity) apply the operation to each data variable and return a Dataset. Multi-input functions (multispectral indices) accept a Dataset with band-name keyword arguments.
+
+```python
+# Single-input: returns a Dataset with slope computed for each variable
+slope_ds = slope(my_dataset)
+
+# Multi-input: map Dataset variables to band parameters
+ndvi_result = ndvi(my_dataset, nir='band_5', red='band_4')
+
+# Zonal stats: columns prefixed by variable name
+stats_df = zonal.stats(zones, my_dataset)  # → elevation_mean, temperature_mean, ...
+```
+
 Check out the user guide [here](/examples/user_guide/).
 
 ------

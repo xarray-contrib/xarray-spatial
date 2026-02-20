@@ -455,12 +455,15 @@ def stats(
         the shape, values, and locations of the zones. An integer field
         in the input `zones` DataArray defines a zone.
 
-    values : xr.DataArray
+    values : xr.DataArray or xr.Dataset
         values is a 2D xarray DataArray of numeric values (integers or floats).
         The input `values` raster contains the input values used in
         calculating the output statistic for each zone. In dask case,
         the chunksizes of `zones` and `values` should be matching. If not,
         `values` will be rechunked to be the same as of `zones`.
+        When a Dataset is passed, stats are computed for each variable
+        and columns are prefixed with the variable name
+        (e.g. ``elevation_mean``).
 
     zone_ids : list of ints, or floats
         List of zones to be included in calculation. If no zone_ids provided,
@@ -492,6 +495,10 @@ def stats(
     stats_df : Union[pandas.DataFrame, dask.dataframe.DataFrame]
         A pandas DataFrame, or a dask DataFrame where each column
         is a statistic and each row is a zone with zone id.
+        When ``values`` is a Dataset, the returned DataFrame has
+        columns prefixed by the variable name (e.g. ``elevation_mean``,
+        ``elevation_max``), and ``return_type`` must be
+        ``'pandas.DataFrame'``.
 
     Examples
     --------
@@ -566,6 +573,27 @@ def stats(
         3    30  77.0   99   55  1925  14.21267  202.0     25
     """
 
+    # Dataset support: run stats per variable and merge into one DataFrame
+    if isinstance(values, xr.Dataset):
+        if return_type != 'pandas.DataFrame':
+            raise ValueError(
+                "return_type must be 'pandas.DataFrame' when values is a Dataset"
+            )
+        dfs = []
+        for var_name in values.data_vars:
+            df = stats(
+                zones, values[var_name], zone_ids, stats_funcs,
+                nodata_values, 'pandas.DataFrame',
+            )
+            df = df.rename(
+                columns={c: f'{var_name}_{c}' for c in df.columns if c != 'zone'}
+            )
+            dfs.append(df)
+        result = dfs[0]
+        for df in dfs[1:]:
+            result = result.merge(df, on='zone', how='outer')
+        return result
+
     validate_arrays(zones, values)
 
     if not (
@@ -591,12 +619,12 @@ def stats(
     if isinstance(stats_funcs, list):
         # create a dict of stats
         stats_funcs_dict = {}
-        for stats in stats_funcs:
-            func = _DEFAULT_STATS.get(stats, None)
+        for stat_name in stats_funcs:
+            func = _DEFAULT_STATS.get(stat_name, None)
             if func is None:
-                err_str = f"Invalid stat name. {stats} option not supported."
+                err_str = f"Invalid stat name. {stat_name} option not supported."
                 raise ValueError(err_str)
-            stats_funcs_dict[stats] = func
+            stats_funcs_dict[stat_name] = func
 
     elif isinstance(stats_funcs, dict):
         stats_funcs_dict = stats_funcs.copy()

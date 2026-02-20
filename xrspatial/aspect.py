@@ -19,6 +19,7 @@ from xrspatial.utils import Z_UNITS
 from xrspatial.utils import _extract_latlon_coords
 from xrspatial.utils import cuda_args
 from xrspatial.utils import ngjit
+from xrspatial.dataset_support import supports_dataset
 
 
 def _geodesic_cuda_dims(shape):
@@ -270,6 +271,7 @@ def _run_dask_cupy_geodesic(data, lat_2d, lon_2d, a2, b2, z_factor):
 # Public API
 # =====================================================================
 
+@supports_dataset
 def aspect(agg: xr.DataArray,
            name: Optional[str] = 'aspect',
            method: str = 'planar',
@@ -296,9 +298,11 @@ def aspect(agg: xr.DataArray,
 
     Parameters
     ----------
-    agg : xarray.DataArray
+    agg : xarray.DataArray or xr.Dataset
         2D NumPy, CuPy, or Dask with NumPy-backed xarray DataArray
         of elevation values.
+        If a Dataset is passed, the operation is applied to each
+        data variable independently.
     name : str, default='aspect'
         Name of ouput DataArray.
     method : str, default='planar'
@@ -313,7 +317,10 @@ def aspect(agg: xr.DataArray,
 
     Returns
     -------
-    aspect_agg : xarray.DataArray of the same type as `agg`
+    aspect_agg : xarray.DataArray or xr.Dataset
+        If `agg` is a DataArray, returns a DataArray of the same type.
+        If `agg` is a Dataset, returns a Dataset with aspect computed
+        for each data variable.
         2D aggregate array of calculated aspect values.
         All other input attributes are preserved.
 

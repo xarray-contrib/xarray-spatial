@@ -28,6 +28,7 @@ from xrspatial.utils import _extract_latlon_coords
 from xrspatial.utils import cuda_args
 from xrspatial.utils import get_dataarray_resolution
 from xrspatial.utils import ngjit
+from xrspatial.dataset_support import supports_dataset
 
 
 def _geodesic_cuda_dims(shape):
@@ -267,6 +268,7 @@ def _run_dask_cupy_geodesic(data, lat_2d, lon_2d, a2, b2, z_factor):
 # Public API
 # =====================================================================
 
+@supports_dataset
 def slope(agg: xr.DataArray,
           name: str = 'slope',
           method: str = 'planar',
@@ -276,8 +278,10 @@ def slope(agg: xr.DataArray,
 
     Parameters
     ----------
-    agg : xr.DataArray
+    agg : xr.DataArray or xr.Dataset
         2D array of elevation data.
+        If a Dataset is passed, the operation is applied to each
+        data variable independently.
     name : str, default='slope'
         Name of output DataArray.
     method : str, default='planar'
@@ -292,7 +296,10 @@ def slope(agg: xr.DataArray,
 
     Returns
     -------
-    slope_agg : xr.DataArray of same type as `agg`
+    slope_agg : xr.DataArray or xr.Dataset
+        If `agg` is a DataArray, returns a DataArray of the same type.
+        If `agg` is a Dataset, returns a Dataset with slope computed
+        for each data variable.
         2D array of slope values.
         All other input attributes are preserved.
 

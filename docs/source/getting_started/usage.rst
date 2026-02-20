@@ -15,6 +15,27 @@ Basic Pattern
    my_dataarray = xr.DataArray(...)
    hillshaded_dataarray = hillshade(my_dataarray)
 
+
+Dataset Support
+================
+
+Most functions also accept an ``xr.Dataset``. Single-input functions apply
+the operation to each data variable and return a Dataset. Multi-input
+functions (multispectral indices) accept a Dataset with band-name keyword
+arguments.
+
+.. code-block:: python
+
+   from xrspatial import slope
+   from xrspatial.multispectral import ndvi
+
+   # Single-input: returns a Dataset with slope for each variable
+   slope_ds = slope(my_dataset)
+
+   # Multi-input: map Dataset variables to band parameters
+   ndvi_result = ndvi(my_dataset, nir='band_5', red='band_4')
+
+
 Check out the user guide `here <https://github.com/xarray-contrib/xarray-spatial/blob/master/examples/user_guide>`_.
 
 

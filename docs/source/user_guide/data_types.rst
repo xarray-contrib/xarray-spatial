@@ -227,11 +227,49 @@ Best Practices
    combined = (ndvi_result + savi_result) / 2
 
 
+Dataset Input Support
+=====================
+
+Most functions accept an ``xr.Dataset`` in addition to ``xr.DataArray``.
+When a Dataset is passed, the operation is applied to each data variable
+independently and the result is returned as a new Dataset.
+
+Single-input functions (surface, classification, focal, proximity):
+
+.. code-block:: python
+
+   from xrspatial import slope
+
+   # Apply slope to every variable in the Dataset
+   slope_ds = slope(my_dataset)
+   # Returns an xr.Dataset with the same variable names
+
+Multi-input functions (multispectral indices) accept a Dataset with keyword
+arguments that map band aliases to variable names:
+
+.. code-block:: python
+
+   from xrspatial.multispectral import ndvi
+
+   # Map Dataset variables to band parameters
+   ndvi_result = ndvi(my_dataset, nir='band_5', red='band_4')
+
+``zonal.stats`` also accepts a Dataset for the ``values`` parameter, returning
+a merged DataFrame with columns prefixed by variable name:
+
+.. code-block:: python
+
+   from xrspatial.zonal import stats
+
+   df = stats(zones, my_dataset)
+   # Columns: zone, elevation_mean, elevation_max, ..., temperature_mean, ...
+
+
 Summary
 =======
 
-- **Input**: xarray-spatial accepts any numeric data type (int or float)
+- **Input**: xarray-spatial accepts any numeric data type (int or float), as either ``xr.DataArray`` or ``xr.Dataset``
 - **Processing**: All calculations are performed in float32 precision
-- **Output**: Results are returned as float32 DataArrays
+- **Output**: Results are returned as float32 DataArrays (or a Dataset of float32 DataArrays when a Dataset is passed)
 - **Consistency**: This behavior is consistent across NumPy, Dask, and CuPy backends
 - **Rationale**: Float32 provides adequate precision for geospatial analysis while using half the memory of float64

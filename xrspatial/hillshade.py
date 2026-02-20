@@ -14,6 +14,7 @@ from numba import cuda
 
 from .gpu_rtx import has_rtx
 from .utils import calc_cuda_dims, has_cuda_and_cupy, is_cupy_array, is_cupy_backed
+from .dataset_support import supports_dataset
 
 
 def _run_numpy(data, azimuth=225, angle_altitude=25):
@@ -99,6 +100,7 @@ def _run_cupy(d_data, azimuth, angle_altitude):
     return output
 
 
+@supports_dataset
 def hillshade(agg: xr.DataArray,
               azimuth: int = 225,
               angle_altitude: int = 25,
@@ -111,9 +113,11 @@ def hillshade(agg: xr.DataArray,
 
     Parameters
     ----------
-    agg : xarray.DataArray
+    agg : xarray.DataArray or xr.Dataset
         2D NumPy, CuPy, NumPy-backed Dask, or Cupy-backed Dask array
         of elevation values.
+        If a Dataset is passed, the operation is applied to each
+        data variable independently.
     angle_altitude : int, default=25
         Altitude angle of the sun specified in degrees.
     azimuth : int, default=225
@@ -129,7 +133,10 @@ def hillshade(agg: xr.DataArray,
 
     Returns
     -------
-    hillshade_agg : xarray.DataArray, of same type as `agg`
+    hillshade_agg : xarray.DataArray or xr.Dataset
+        If `agg` is a DataArray, returns a DataArray of the same type.
+        If `agg` is a Dataset, returns a Dataset with hillshade computed
+        for each data variable.
         2D aggregate array of illumination values.
 
     References

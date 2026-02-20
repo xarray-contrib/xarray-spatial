@@ -10,6 +10,7 @@ import xarray as xr
 from numba import prange
 
 from xrspatial.utils import get_dataarray_resolution, ngjit
+from xrspatial.dataset_support import supports_dataset
 
 EUCLIDEAN = 0
 GREAT_CIRCLE = 1
@@ -648,6 +649,7 @@ def _process(
 
 # ported from
 # https://github.com/OSGeo/gdal/blob/master/gdal/alg/gdalproximity.cpp
+@supports_dataset
 def proximity(
     raster: xr.DataArray,
     x: str = "x",
@@ -682,8 +684,10 @@ def proximity(
 
     Parameters
     ----------
-    raster : xr.DataArray
+    raster : xr.DataArray or xr.Dataset
         2D array image with `raster.shape` = (height, width).
+        If a Dataset is passed, the function is applied to each
+        data variable independently, returning a Dataset.
 
     x : str, default='x'
         Name of x-coordinates.
@@ -722,7 +726,10 @@ def proximity(
 
     Returns
     -------
-    proximity_agg: xr.DataArray of same type as `raster`
+    xr.DataArray or xr.Dataset
+        If ``raster`` is a DataArray, returns a DataArray.
+        If ``raster`` is a Dataset, returns a Dataset with each
+        variable processed independently.
         2D array of proximity values.
         All other input attributes are preserved.
 
@@ -783,6 +790,7 @@ def proximity(
     return result
 
 
+@supports_dataset
 def allocation(
     raster: xr.DataArray,
     x: str = "x",
@@ -816,8 +824,10 @@ def allocation(
 
     Parameters
     ----------
-    raster : xr.DataArray
+    raster : xr.DataArray or xr.Dataset
         2D array of target data.
+        If a Dataset is passed, the function is applied to each
+        data variable independently, returning a Dataset.
 
     x : str, default='x'
         Name of x-coordinates.
@@ -855,7 +865,10 @@ def allocation(
 
     Returns
     -------
-    allocation_agg: xr.DataArray of same type as `raster`
+    xr.DataArray or xr.Dataset
+        If ``raster`` is a DataArray, returns a DataArray.
+        If ``raster`` is a Dataset, returns a Dataset with each
+        variable processed independently.
         2D array of allocation values.
         All other input attributes are preserved.
 
@@ -915,6 +928,7 @@ def allocation(
     return result
 
 
+@supports_dataset
 def direction(
     raster: xr.DataArray,
     x: str = "x",
@@ -952,8 +966,10 @@ def direction(
 
     Parameters
     ----------
-    raster : xr.DataArray
+    raster : xr.DataArray or xr.Dataset
         2D array image with `raster.shape` = (height, width).
+        If a Dataset is passed, the function is applied to each
+        data variable independently, returning a Dataset.
 
     x : str, default='x'
         Name of x-coordinates.
@@ -992,7 +1008,10 @@ def direction(
 
     Returns
     -------
-    direction_agg: xr.DataArray of same type as `raster`
+    xr.DataArray or xr.Dataset
+        If ``raster`` is a DataArray, returns a DataArray.
+        If ``raster`` is a Dataset, returns a Dataset with each
+        variable processed independently.
         2D array of direction values.
         All other input attributes are preserved.
 

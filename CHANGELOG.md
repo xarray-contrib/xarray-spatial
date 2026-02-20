@@ -2,6 +2,17 @@
 -----------
 
 
+### Version 0.5.3 (unreleased)
+- Fixes #134: Add `xr.Dataset` as input type for appropriate modules.
+  Most public functions now transparently accept `xr.Dataset` in addition
+  to `xr.DataArray`. Single-input functions (slope, aspect, curvature,
+  hillshade, focal.mean, all classification functions, proximity/allocation/
+  direction) iterate over data variables and return a Dataset. Multi-input
+  functions (all multispectral indices) accept a Dataset with band-name
+  keyword arguments. `zonal.stats` computes per-variable statistics and
+  returns a merged DataFrame with prefixed columns.
+
+
 ### Version 0.5.2 - 2025-12-18
 - Make dask optional (#835)
 - Fixes 832 update citation info in readme (#834)
