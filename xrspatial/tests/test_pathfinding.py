@@ -74,6 +74,8 @@ def test_a_star_search_no_barriers(input_data):
                         assert np.nanmin(path_agg) == 0
 
 
+@pytest.mark.filterwarnings("ignore:Start at a non crossable location:Warning")
+@pytest.mark.filterwarnings("ignore:End at a non crossable location:Warning")
 def test_a_star_search_with_barriers(input_data):
     agg = input_data
     barriers = [1]
@@ -92,6 +94,8 @@ def test_a_star_search_with_barriers(input_data):
                 general_output_checks(agg, path_agg, expected_results)
 
 
+@pytest.mark.filterwarnings("ignore:Start at a non crossable location:Warning")
+@pytest.mark.filterwarnings("ignore:End at a non crossable location:Warning")
 def test_a_star_search_snap(input_data_with_nans):
     agg, start, goal = input_data_with_nans
 
