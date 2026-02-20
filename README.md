@@ -137,10 +137,15 @@ In the GIS world, rasters are used for representing continuous phenomena (e.g. e
 
 | Name | NumPy xr.DataArray | Dask xr.DataArray | CuPy GPU xr.DataArray | Dask GPU xr.DataArray |
 |:----------:|:----------------------:|:--------------------:|:-------------------:|:------:|
+| [Box Plot](xrspatial/classify.py) |✅️ |✅ | ✅ |✅ |
 | [Equal Interval](xrspatial/classify.py) |✅️ |✅ | ✅ |✅ |
+| [Head/Tail Breaks](xrspatial/classify.py) |✅️ |✅ | ✅ |✅ |
+| [Maximum Breaks](xrspatial/classify.py) |✅️ |✅ | ✅ |✅ |
 | [Natural Breaks](xrspatial/classify.py) |✅️ |✅ | ✅ |✅ |
-| [Reclassify](xrspatial/classify.py) |✅️ |✅ | ✅ |✅ |
+| [Percentiles](xrspatial/classify.py) |✅️ |✅ | ✅ |✅ |
 | [Quantile](xrspatial/classify.py) |✅️ |✅ | ✅ |✅ |
+| [Reclassify](xrspatial/classify.py) |✅️ |✅ | ✅ |✅ |
+| [Std Mean](xrspatial/classify.py) |✅️ |✅ | ✅ |✅ |
 
 -------
 

@@ -2,7 +2,9 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from xrspatial import binary, equal_interval, natural_breaks, quantile, reclassify
+from xrspatial import (binary, box_plot, equal_interval, head_tail_breaks,
+                       maximum_breaks, natural_breaks, percentiles, quantile,
+                       reclassify, std_mean)
 from xrspatial.tests.general_checks import (assert_input_data_unmodified,
                                             create_test_raster,
                                             cuda_and_cupy_available,
@@ -497,4 +499,386 @@ def test_natural_breaks_dask_matches_numpy():
 
     np.testing.assert_allclose(
         numpy_result.data, dask_result.data.compute(), equal_nan=True
+    )
+
+
+# ===================================================================
+# std_mean tests
+# ===================================================================
+
+@pytest.fixture
+def result_std_mean():
+    expected_result = np.asarray([
+        [np.nan, 1., 1., 1., np.nan],
+        [1., 2., 2., 2., 2.],
+        [2., 2., 2., 2., 2.],
+        [3., 3., 3., 3., np.nan]
+    ], dtype=np.float32)
+    return expected_result
+
+
+def test_std_mean_numpy(result_std_mean):
+    numpy_agg = input_data()
+    numpy_result = std_mean(numpy_agg)
+    general_output_checks(numpy_agg, numpy_result, result_std_mean, verify_dtype=True)
+
+
+@dask_array_available
+def test_std_mean_dask_numpy(result_std_mean):
+    dask_agg = input_data('dask+numpy')
+    dask_result = std_mean(dask_agg)
+    general_output_checks(dask_agg, dask_result, result_std_mean, verify_dtype=True)
+
+
+@cuda_and_cupy_available
+def test_std_mean_cupy(result_std_mean):
+    cupy_agg = input_data('cupy')
+    cupy_result = std_mean(cupy_agg)
+    general_output_checks(cupy_agg, cupy_result, result_std_mean, verify_dtype=True)
+
+
+@dask_array_available
+@cuda_and_cupy_available
+def test_std_mean_dask_cupy(result_std_mean):
+    dask_cupy_agg = input_data('dask+cupy')
+    dask_cupy_result = std_mean(dask_cupy_agg)
+    general_output_checks(dask_cupy_agg, dask_cupy_result, result_std_mean, verify_dtype=True)
+
+
+def test_std_mean_does_not_modify_input():
+    agg = input_data()
+    original = agg.copy(deep=True)
+    std_mean(agg)
+    assert_input_data_unmodified(original, agg)
+
+
+def test_std_mean_all_same_values():
+    data = np.full((4, 5), 7.0)
+    agg = xr.DataArray(data)
+    result = std_mean(agg)
+    # std=0, so all bins collapse to mean=7. All values in class 0.
+    finite_mask = np.isfinite(result.data)
+    assert np.all(result.data[finite_mask] == 0)
+
+
+# ===================================================================
+# head_tail_breaks tests
+# ===================================================================
+
+@pytest.fixture
+def result_head_tail_breaks():
+    expected_result = np.asarray([
+        [np.nan, 0., 0., 0., np.nan],
+        [0., 0., 0., 0., 0.],
+        [0., 1., 1., 1., 1.],
+        [1., 1., 1., 1., np.nan]
+    ], dtype=np.float32)
+    return expected_result
+
+
+def test_head_tail_breaks_numpy(result_head_tail_breaks):
+    numpy_agg = input_data()
+    numpy_result = head_tail_breaks(numpy_agg)
+    general_output_checks(numpy_agg, numpy_result, result_head_tail_breaks, verify_dtype=True)
+
+
+@dask_array_available
+def test_head_tail_breaks_dask_numpy(result_head_tail_breaks):
+    dask_agg = input_data('dask+numpy')
+    dask_result = head_tail_breaks(dask_agg)
+    general_output_checks(dask_agg, dask_result, result_head_tail_breaks, verify_dtype=True)
+
+
+@cuda_and_cupy_available
+def test_head_tail_breaks_cupy(result_head_tail_breaks):
+    cupy_agg = input_data('cupy')
+    cupy_result = head_tail_breaks(cupy_agg)
+    general_output_checks(cupy_agg, cupy_result, result_head_tail_breaks, verify_dtype=True)
+
+
+@dask_array_available
+@cuda_and_cupy_available
+def test_head_tail_breaks_dask_cupy(result_head_tail_breaks):
+    dask_cupy_agg = input_data('dask+cupy')
+    dask_cupy_result = head_tail_breaks(dask_cupy_agg)
+    general_output_checks(dask_cupy_agg, dask_cupy_result, result_head_tail_breaks, verify_dtype=True)
+
+
+def test_head_tail_breaks_does_not_modify_input():
+    agg = input_data()
+    original = agg.copy(deep=True)
+    head_tail_breaks(agg)
+    assert_input_data_unmodified(original, agg)
+
+
+def test_head_tail_breaks_heavy_tailed():
+    # Heavy-tailed data should produce more classes than uniform data
+    data = np.array([
+        [1., 1., 1., 1., 2.],
+        [2., 2., 3., 3., 5.],
+        [5., 10., 20., 50., 100.],
+        [200., 500., 1000., 2000., 5000.],
+    ])
+    agg = xr.DataArray(data)
+    result = head_tail_breaks(agg)
+    unique_classes = np.unique(result.data[np.isfinite(result.data)])
+    # Heavy-tailed data should produce more than 2 classes
+    assert len(unique_classes) > 2
+
+
+# ===================================================================
+# percentiles tests
+# ===================================================================
+
+@pytest.fixture
+def result_percentiles():
+    expected_result = np.asarray([
+        [np.nan, 0., 1., 2., np.nan],
+        [2., 2., 2., 2., 2.],
+        [2., 3., 3., 3., 3.],
+        [3., 3., 4., 5., np.nan]
+    ], dtype=np.float32)
+    return expected_result
+
+
+def test_percentiles_numpy(result_percentiles):
+    numpy_agg = input_data()
+    numpy_result = percentiles(numpy_agg)
+    general_output_checks(numpy_agg, numpy_result, result_percentiles, verify_dtype=True)
+
+
+@dask_array_available
+def test_percentiles_dask_numpy(result_percentiles):
+    # Dask percentile is approximate; verify structure not exact values
+    dask_agg = input_data('dask+numpy')
+    dask_result = percentiles(dask_agg)
+    general_output_checks(dask_agg, dask_result)
+
+
+@cuda_and_cupy_available
+def test_percentiles_cupy(result_percentiles):
+    cupy_agg = input_data('cupy')
+    cupy_result = percentiles(cupy_agg)
+    general_output_checks(cupy_agg, cupy_result, result_percentiles, verify_dtype=True)
+
+
+@dask_array_available
+@cuda_and_cupy_available
+def test_percentiles_dask_cupy(result_percentiles):
+    dask_cupy_agg = input_data('dask+cupy')
+    dask_cupy_result = percentiles(dask_cupy_agg)
+    general_output_checks(dask_cupy_agg, dask_cupy_result)
+
+
+def test_percentiles_does_not_modify_input():
+    agg = input_data()
+    original = agg.copy(deep=True)
+    percentiles(agg)
+    assert_input_data_unmodified(original, agg)
+
+
+def test_percentiles_custom_pct():
+    numpy_agg = input_data()
+    result = percentiles(numpy_agg, pct=[25, 50, 75])
+    result_data = result.data
+    finite_vals = result_data[np.isfinite(result_data)]
+    unique_classes = np.unique(finite_vals)
+    # Should have at most 4 classes (3 percentile breaks + max)
+    assert len(unique_classes) <= 4
+
+
+def test_percentiles_single_pct():
+    numpy_agg = input_data()
+    result = percentiles(numpy_agg, pct=[50])
+    result_data = result.data
+    finite_vals = result_data[np.isfinite(result_data)]
+    unique_classes = np.unique(finite_vals)
+    # Single percentile + max → 2 classes
+    assert len(unique_classes) == 2
+
+
+# ===================================================================
+# maximum_breaks tests
+# ===================================================================
+
+@pytest.fixture
+def result_maximum_breaks():
+    expected_result = np.asarray([
+        [np.nan, 0., 0., 0., np.nan],
+        [0., 0., 0., 0., 0.],
+        [0., 0., 0., 0., 0.],
+        [1., 2., 3., 4., np.nan]
+    ], dtype=np.float32)
+    return expected_result
+
+
+def test_maximum_breaks_numpy(result_maximum_breaks):
+    numpy_agg = input_data()
+    numpy_result = maximum_breaks(numpy_agg)
+    general_output_checks(numpy_agg, numpy_result, result_maximum_breaks, verify_dtype=True)
+
+
+@dask_array_available
+def test_maximum_breaks_dask_numpy(result_maximum_breaks):
+    dask_agg = input_data('dask+numpy')
+    dask_result = maximum_breaks(dask_agg)
+    general_output_checks(dask_agg, dask_result, result_maximum_breaks, verify_dtype=True)
+
+
+@cuda_and_cupy_available
+def test_maximum_breaks_cupy(result_maximum_breaks):
+    cupy_agg = input_data('cupy')
+    cupy_result = maximum_breaks(cupy_agg)
+    general_output_checks(cupy_agg, cupy_result, result_maximum_breaks, verify_dtype=True)
+
+
+@dask_array_available
+@cuda_and_cupy_available
+def test_maximum_breaks_dask_cupy(result_maximum_breaks):
+    dask_cupy_agg = input_data('dask+cupy')
+    dask_cupy_result = maximum_breaks(dask_cupy_agg)
+    general_output_checks(dask_cupy_agg, dask_cupy_result, result_maximum_breaks, verify_dtype=True)
+
+
+def test_maximum_breaks_does_not_modify_input():
+    agg = input_data()
+    original = agg.copy(deep=True)
+    maximum_breaks(agg)
+    assert_input_data_unmodified(original, agg)
+
+
+def test_maximum_breaks_k_equals_2():
+    numpy_agg = input_data()
+    result = maximum_breaks(numpy_agg, k=2)
+    finite_vals = result.data[np.isfinite(result.data)]
+    unique_classes = np.unique(finite_vals)
+    assert len(unique_classes) == 2
+
+
+def test_maximum_breaks_k_exceeds_unique():
+    # When k > number of unique values, fall back gracefully
+    data = np.array([[1., 2., 3.], [4., 5., np.nan]])
+    agg = xr.DataArray(data)
+    result = maximum_breaks(agg, k=10)
+    finite_vals = result.data[np.isfinite(result.data)]
+    assert len(np.unique(finite_vals)) <= 5
+
+
+# ===================================================================
+# box_plot tests
+# ===================================================================
+
+@pytest.fixture
+def result_box_plot():
+    expected_result = np.asarray([
+        [np.nan, 1., 1., 1., np.nan],
+        [1., 1., 2., 2., 2.],
+        [2., 3., 3., 3., 3.],
+        [4., 4., 4., 4., np.nan]
+    ], dtype=np.float32)
+    return expected_result
+
+
+def test_box_plot_numpy(result_box_plot):
+    numpy_agg = input_data()
+    numpy_result = box_plot(numpy_agg)
+    general_output_checks(numpy_agg, numpy_result, result_box_plot, verify_dtype=True)
+
+
+@dask_array_available
+def test_box_plot_dask_numpy(result_box_plot):
+    # Dask percentile is approximate; verify structure not exact values
+    dask_agg = input_data('dask+numpy')
+    dask_result = box_plot(dask_agg)
+    general_output_checks(dask_agg, dask_result)
+
+
+@cuda_and_cupy_available
+def test_box_plot_cupy(result_box_plot):
+    cupy_agg = input_data('cupy')
+    cupy_result = box_plot(cupy_agg)
+    general_output_checks(cupy_agg, cupy_result, result_box_plot, verify_dtype=True)
+
+
+@dask_array_available
+@cuda_and_cupy_available
+def test_box_plot_dask_cupy(result_box_plot):
+    dask_cupy_agg = input_data('dask+cupy')
+    dask_cupy_result = box_plot(dask_cupy_agg)
+    general_output_checks(dask_cupy_agg, dask_cupy_result)
+
+
+def test_box_plot_does_not_modify_input():
+    agg = input_data()
+    original = agg.copy(deep=True)
+    box_plot(agg)
+    assert_input_data_unmodified(original, agg)
+
+
+def test_box_plot_custom_hinge():
+    numpy_agg = input_data()
+    result = box_plot(numpy_agg, hinge=3.0)
+    result_data = result.data
+    finite_vals = result_data[np.isfinite(result_data)]
+    # With hinge=3.0, whiskers extend further so fewer outliers
+    assert len(np.unique(finite_vals)) >= 2
+
+
+# ===================================================================
+# Name parameter tests for new methods
+# ===================================================================
+
+def test_new_methods_output_name_default():
+    agg = input_data()
+    assert std_mean(agg).name == 'std_mean'
+    assert head_tail_breaks(agg).name == 'head_tail_breaks'
+    assert percentiles(agg).name == 'percentiles'
+    assert maximum_breaks(agg).name == 'maximum_breaks'
+    assert box_plot(agg).name == 'box_plot'
+
+
+def test_new_methods_output_name_custom():
+    agg = input_data()
+    assert std_mean(agg, name='custom').name == 'custom'
+    assert head_tail_breaks(agg, name='custom').name == 'custom'
+    assert percentiles(agg, name='custom').name == 'custom'
+    assert maximum_breaks(agg, name='custom').name == 'custom'
+    assert box_plot(agg, name='custom').name == 'custom'
+
+
+# ===================================================================
+# Cross-backend consistency tests for new methods
+# ===================================================================
+
+@dask_array_available
+def test_std_mean_dask_matches_numpy():
+    elevation = np.arange(100, dtype=np.float64).reshape(10, 10)
+    numpy_agg = xr.DataArray(elevation)
+    dask_agg = xr.DataArray(da.from_array(elevation, chunks=(5, 5)))
+    np.testing.assert_allclose(
+        std_mean(numpy_agg).data, std_mean(dask_agg).data.compute(), equal_nan=True
+    )
+
+
+@dask_array_available
+def test_head_tail_breaks_dask_matches_numpy():
+    elevation = np.arange(100, dtype=np.float64).reshape(10, 10)
+    numpy_agg = xr.DataArray(elevation)
+    dask_agg = xr.DataArray(da.from_array(elevation, chunks=(5, 5)))
+    np.testing.assert_allclose(
+        head_tail_breaks(numpy_agg).data,
+        head_tail_breaks(dask_agg).data.compute(),
+        equal_nan=True,
+    )
+
+
+@dask_array_available
+def test_maximum_breaks_dask_matches_numpy():
+    elevation = np.arange(100, dtype=np.float64).reshape(10, 10)
+    numpy_agg = xr.DataArray(elevation)
+    dask_agg = xr.DataArray(da.from_array(elevation, chunks=(5, 5)))
+    np.testing.assert_allclose(
+        maximum_breaks(numpy_agg).data,
+        maximum_breaks(dask_agg).data.compute(),
+        equal_nan=True,
     )

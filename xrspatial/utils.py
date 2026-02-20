@@ -590,6 +590,129 @@ def warn_if_unit_mismatch(agg: xr.DataArray) -> None:
         )
 
 
+# ---------- Z-unit conversion for geodesic methods ----------
+Z_UNITS = {
+    'meter': 1.0, 'meters': 1.0, 'm': 1.0,
+    'foot': 0.3048, 'feet': 0.3048, 'ft': 0.3048,
+    'kilometer': 1000.0, 'kilometers': 1000.0, 'km': 1000.0,
+    'mile': 1609.344, 'miles': 1609.344, 'mi': 1609.344,
+}
+
+
+# ---------- Lat/lon coordinate extraction for geodesic methods ----------
+# Known dimension / coordinate names (lower-cased for matching)
+_LAT_NAMES = {'lat', 'latitude', 'y'}
+_LON_NAMES = {'lon', 'longitude', 'x'}
+
+
+def _extract_latlon_coords(agg: xr.DataArray):
+    """
+    Extract 2-D latitude and longitude arrays from a DataArray.
+
+    Supports:
+    - 1-D coordinates on the last two dims (regular geographic grid).
+    - 2-D coordinates that vary per cell (curvilinear grid).
+
+    Returns
+    -------
+    lat_2d, lon_2d : numpy.ndarray
+        Always 2-D float64 numpy arrays of shape ``(H, W)``.
+
+    Raises
+    ------
+    ValueError
+        If coordinates are missing, non-numeric, or outside geographic
+        ranges (lat not in [-90, 90], lon not in [-180, 360]).
+    """
+    if agg.ndim < 2:
+        raise ValueError(
+            "geodesic method requires a 2-D DataArray, "
+            f"got {agg.ndim}-D"
+        )
+
+    dim_y, dim_x = agg.dims[-2], agg.dims[-1]
+
+    # --- locate lat coordinate ---
+    lat_coord = _find_coord(agg, dim_y, _LAT_NAMES, 'latitude')
+    # --- locate lon coordinate ---
+    lon_coord = _find_coord(agg, dim_x, _LON_NAMES, 'longitude')
+
+    lat_vals = np.asarray(lat_coord.values, dtype=np.float64)
+    lon_vals = np.asarray(lon_coord.values, dtype=np.float64)
+
+    # Build 2-D arrays
+    if lat_vals.ndim == 1 and lon_vals.ndim == 1:
+        # Regular grid: broadcast to 2-D
+        lat_2d = np.broadcast_to(lat_vals[:, np.newaxis],
+                                 (agg.sizes[dim_y], agg.sizes[dim_x])).copy()
+        lon_2d = np.broadcast_to(lon_vals[np.newaxis, :],
+                                 (agg.sizes[dim_y], agg.sizes[dim_x])).copy()
+    elif lat_vals.ndim == 2 and lon_vals.ndim == 2:
+        lat_2d = lat_vals
+        lon_2d = lon_vals
+    else:
+        raise ValueError(
+            f"lat/lon coordinates must be both 1-D or both 2-D, "
+            f"got lat={lat_vals.ndim}-D and lon={lon_vals.ndim}-D"
+        )
+
+    # --- validate ranges ---
+    _validate_geographic_range(lat_2d, lon_2d)
+
+    return lat_2d, lon_2d
+
+
+def _find_coord(agg, dim_name, known_names, label):
+    """Find a coordinate matching *dim_name* or one of *known_names*."""
+    # 1) Try the dimension name directly
+    if dim_name in agg.coords:
+        coord = agg.coords[dim_name]
+        if np.issubdtype(coord.dtype, np.number):
+            return coord
+
+    # 2) Scan all coords for a known name
+    for name in agg.coords:
+        if str(name).lower() in known_names:
+            coord = agg.coords[name]
+            if np.issubdtype(coord.dtype, np.number):
+                return coord
+
+    raise ValueError(
+        f"geodesic method requires {label} coordinates on the DataArray. "
+        f"No numeric coordinate found for dim '{dim_name}' or any of "
+        f"{sorted(known_names)}."
+    )
+
+
+def _validate_geographic_range(lat_2d, lon_2d):
+    """Raise ValueError if lat/lon values look non-geographic."""
+    lat_min = np.nanmin(lat_2d)
+    lat_max = np.nanmax(lat_2d)
+    lon_min = np.nanmin(lon_2d)
+    lon_max = np.nanmax(lon_2d)
+
+    if lat_min < -90 or lat_max > 90:
+        raise ValueError(
+            f"Latitude values must be in [-90, 90], "
+            f"got [{lat_min}, {lat_max}]. "
+            f"Are your coordinates in a projected CRS?"
+        )
+    if lon_min < -180 or lon_max > 360:
+        raise ValueError(
+            f"Longitude values must be in [-180, 360], "
+            f"got [{lon_min}, {lon_max}]. "
+            f"Are your coordinates in a projected CRS?"
+        )
+    lat_span = lat_max - lat_min
+    lon_span = lon_max - lon_min
+    if lat_span > 180 or lon_span > 360:
+        raise ValueError(
+            f"Coordinate span too large for geographic coordinates "
+            f"(lat span={lat_span}, lon span={lon_span}). "
+            f"Are your coordinates in a projected CRS?"
+        )
+
+
 def _to_float_scalar(x) -> float:
     """Convert numpy/cupy scalar or 0-d array to python float safely."""
     if cupy is not None:
