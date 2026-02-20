@@ -464,6 +464,8 @@ def stats(
         When a Dataset is passed, stats are computed for each variable
         and columns are prefixed with the variable name
         (e.g. ``elevation_mean``).
+        For 3D time-series DataArrays, convert to a Dataset first using
+        ``.to_dataset(dim='time')`` and pass the resulting Dataset.
 
     zone_ids : list of ints, or floats
         List of zones to be included in calculation. If no zone_ids provided,
@@ -571,6 +573,20 @@ def stats(
         1    10  27.0   49    5   675  14.21267  202.0     25
         2    20  72.0   94   50  1800  14.21267  202.0     25
         3    30  77.0   99   55  1925  14.21267  202.0     25
+
+    stats() works with 3D time-series DataArrays via Dataset conversion
+
+    .. sourcecode:: python
+
+        >>> # Convert a 3D time-series DataArray to a Dataset,
+        >>> # then pass to stats() to get per-timestep statistics.
+        >>> values_3d = xr.DataArray(
+        ...     np.random.rand(2, 10, 10),
+        ...     dims=['time', 'dim_0', 'dim_1'],
+        ...     coords={'time': [2020, 2021]})
+        >>> ds = values_3d.to_dataset(dim='time')
+        >>> stats_df = stats(zones=zones, values=ds)
+        >>> # Columns: zone, 2020_mean, 2020_max, ..., 2021_mean, 2021_max, ...
     """
 
     # Dataset support: run stats per variable and merge into one DataFrame

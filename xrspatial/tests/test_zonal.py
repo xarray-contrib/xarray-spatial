@@ -619,6 +619,169 @@ def test_zonal_stats_inputs_unmodified(backend, data_zones, data_values_2d, resu
     assert_input_data_unmodified(data_values_2d, copied_data_values_2d)
 
 
+@pytest.mark.filterwarnings("ignore:All-NaN slice encountered:RuntimeWarning")
+@pytest.mark.filterwarnings("ignore:invalid value encountered in divide:RuntimeWarning")
+@pytest.mark.parametrize("backend", ['numpy', 'dask+numpy'])
+def test_stats_3d_timeseries_via_dataset(backend):
+    """Convert a 3D time-series DataArray to a Dataset and verify per-timestep stats."""
+    if 'dask' in backend and not dask_array_available():
+        pytest.skip("Requires Dask")
+
+    zones_data = np.array([[0, 0, 1, 1, 2, 2, 3, 3],
+                            [0, 0, 1, 1, 2, 2, 3, 3],
+                            [0, 0, 1, 1, 2, np.nan, 3, 3]])
+    values_data = np.asarray([
+        [0, 0, 1, 1, 2, 2, 3, np.inf],
+        [0, 0, 1, 1, 2, np.nan, 3, 0],
+        [np.inf, 0, 1, 1, 2, 2, 3, 3]
+    ])
+
+    # Stack original (t0) and doubled (t1) into a 3D DataArray
+    values_3d = xr.DataArray(
+        np.stack([values_data, values_data * 2], axis=0),
+        dims=['time', 'y', 'x'],
+        coords={'time': ['t0', 't1']},
+    )
+
+    if 'dask' in backend:
+        zones = xr.DataArray(da.from_array(zones_data, chunks=(3, 4)), dims=['y', 'x'])
+        values_3d = values_3d.chunk({'y': 3, 'x': 4})
+    else:
+        zones = xr.DataArray(zones_data, dims=['y', 'x'])
+
+    ds = values_3d.to_dataset(dim='time')
+    df_result = stats(zones=zones, values=ds)
+
+    if 'dask' in backend:
+        # dask doesn't support majority stat
+        expected = {
+            'zone':     [0, 1, 2, 3],
+            't0_mean':  [0, 1, 2, 2.4],
+            't0_max':   [0, 1, 2, 3],
+            't0_min':   [0, 1, 2, 0],
+            't0_sum':   [0, 6, 8, 12],
+            't0_std':   [0, 0, 0, 1.2],
+            't0_var':   [0, 0, 0, 1.44],
+            't0_count': [5, 6, 4, 5],
+            't1_mean':  [0, 2, 4, 4.8],
+            't1_max':   [0, 2, 4, 6],
+            't1_min':   [0, 2, 4, 0],
+            't1_sum':   [0, 12, 16, 24],
+            't1_std':   [0, 0, 0, 2.4],
+            't1_var':   [0, 0, 0, 5.76],
+            't1_count': [5, 6, 4, 5],
+        }
+    else:
+        expected = {
+            'zone':         [0, 1, 2, 3],
+            't0_mean':      [0, 1, 2, 2.4],
+            't0_max':       [0, 1, 2, 3],
+            't0_min':       [0, 1, 2, 0],
+            't0_sum':       [0, 6, 8, 12],
+            't0_std':       [0, 0, 0, 1.2],
+            't0_var':       [0, 0, 0, 1.44],
+            't0_count':     [5, 6, 4, 5],
+            't0_majority':  [0, 1, 2, 3],
+            't1_mean':      [0, 2, 4, 4.8],
+            't1_max':       [0, 2, 4, 6],
+            't1_min':       [0, 2, 4, 0],
+            't1_sum':       [0, 12, 16, 24],
+            't1_std':       [0, 0, 0, 2.4],
+            't1_var':       [0, 0, 0, 5.76],
+            't1_count':     [5, 6, 4, 5],
+            't1_majority':  [0, 2, 4, 6],
+        }
+
+    check_results(backend, df_result, expected)
+
+
+@pytest.mark.filterwarnings("ignore:All-NaN slice encountered:RuntimeWarning")
+@pytest.mark.filterwarnings("ignore:invalid value encountered in divide:RuntimeWarning")
+@pytest.mark.parametrize("backend", ['numpy'])
+def test_stats_3d_timeseries_via_dataset_zone_ids(backend):
+    """Zone filtering works with Dataset from 3D time-series DataArray."""
+    zones_data = np.array([[0, 0, 1, 1, 2, 2, 3, 3],
+                            [0, 0, 1, 1, 2, 2, 3, 3],
+                            [0, 0, 1, 1, 2, np.nan, 3, 3]])
+    values_data = np.asarray([
+        [0, 0, 1, 1, 2, 2, 3, np.inf],
+        [0, 0, 1, 1, 2, np.nan, 3, 0],
+        [np.inf, 0, 1, 1, 2, 2, 3, 3]
+    ])
+
+    values_3d = xr.DataArray(
+        np.stack([values_data, values_data * 2], axis=0),
+        dims=['time', 'y', 'x'],
+        coords={'time': ['t0', 't1']},
+    )
+    zones = xr.DataArray(zones_data, dims=['y', 'x'])
+    ds = values_3d.to_dataset(dim='time')
+
+    df_result = stats(zones=zones, values=ds, zone_ids=[0, 3])
+
+    expected = {
+        'zone':         [0, 3],
+        't0_mean':      [0, 2.4],
+        't0_max':       [0, 3],
+        't0_min':       [0, 0],
+        't0_sum':       [0, 12],
+        't0_std':       [0, 1.2],
+        't0_var':       [0, 1.44],
+        't0_count':     [5, 5],
+        't0_majority':  [0, 3],
+        't1_mean':      [0, 4.8],
+        't1_max':       [0, 6],
+        't1_min':       [0, 0],
+        't1_sum':       [0, 24],
+        't1_std':       [0, 2.4],
+        't1_var':       [0, 5.76],
+        't1_count':     [5, 5],
+        't1_majority':  [0, 6],
+    }
+
+    check_results(backend, df_result, expected)
+
+
+@pytest.mark.parametrize("backend", ['numpy'])
+def test_stats_3d_timeseries_via_dataset_custom_stats(backend):
+    """Custom stats_funcs work with Dataset from 3D time-series DataArray."""
+    zones_data = np.array([[0, 0, 1, 1, 2, 2, 3, 3],
+                            [0, 0, 1, 1, 2, 2, 3, 3],
+                            [0, 0, 1, 1, 2, np.nan, 3, 3]])
+    values_data = np.asarray([
+        [0, 0, 1, 1, 2, 2, 3, np.inf],
+        [0, 0, 1, 1, 2, np.nan, 3, 0],
+        [np.inf, 0, 1, 1, 2, 2, 3, 3]
+    ])
+
+    values_3d = xr.DataArray(
+        np.stack([values_data, values_data * 2], axis=0),
+        dims=['time', 'y', 'x'],
+        coords={'time': ['t0', 't1']},
+    )
+    zones = xr.DataArray(zones_data, dims=['y', 'x'])
+    ds = values_3d.to_dataset(dim='time')
+
+    custom_stats = {
+        'double_sum': _double_sum,
+        'range': _range,
+    }
+    df_result = stats(
+        zones=zones, values=ds, stats_funcs=custom_stats,
+        zone_ids=[1, 2], nodata_values=0,
+    )
+
+    expected = {
+        'zone':          [1, 2],
+        't0_double_sum': [12, 16],
+        't0_range':      [0, 0],
+        't1_double_sum': [24, 32],
+        't1_range':      [0, 0],
+    }
+
+    check_results(backend, df_result, expected)
+
+
 @pytest.mark.parametrize("backend", ['numpy', 'dask+numpy'])
 def test_count_crosstab_2d(backend, data_zones, data_values_2d, result_count_crosstab_2d):
     # copy input data to verify they're unchanged after running the function
