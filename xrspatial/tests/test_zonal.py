@@ -1162,6 +1162,44 @@ def test_crop():
     assert compare.all()
 
 
+@pytest.mark.skipif(not dask_array_available(), reason="Requires Dask")
+def test_dask_zonal_stats_no_concat_warnings():
+    """Regression test for #774: dd.concat should not warn about unknown divisions."""
+    import warnings
+
+    zones_data = np.array([[0, 0, 1, 1],
+                           [0, 0, 1, 1],
+                           [2, 2, 3, 3]])
+    values_data = np.array([[1, 2, 3, 4],
+                            [5, 6, 7, 8],
+                            [9, 10, 11, 12]], dtype=float)
+
+    zones = xr.DataArray(da.from_array(zones_data, chunks=(3, 2)), dims=['y', 'x'])
+    values = xr.DataArray(da.from_array(values_data, chunks=(3, 2)), dims=['y', 'x'])
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+
+        # all zones (exercises column-wise concat, line 262)
+        result_all = stats(zones=zones, values=values)
+        assert isinstance(result_all, dd.DataFrame)
+        result_all.compute()
+
+        # filtered zone_ids (exercises row-wise concat, line 275)
+        result_filtered = stats(zones=zones, values=values, zone_ids=[0, 3])
+        assert isinstance(result_filtered, dd.DataFrame)
+        result_filtered.compute()
+
+    division_warnings = [
+        w for w in caught
+        if "unknown divisions" in str(w.message).lower()
+    ]
+    assert division_warnings == [], (
+        f"Expected no 'unknown divisions' warnings, got: "
+        f"{[str(w.message) for w in division_warnings]}"
+    )
+
+
 def test_crop_nothing_to_crop():
     arr = np.array([[0, 4, 0, 3],
                     [0, 4, 4, 3],
