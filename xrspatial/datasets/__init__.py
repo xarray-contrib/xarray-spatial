@@ -6,7 +6,6 @@ except ImportError:
     da = None
 
 import datashader as ds
-import noise
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -80,6 +79,13 @@ def make_terrain(
     terrain : xarray.DataArray
         2D array of generated terrain values.
     """
+
+    try:
+        import noise
+    except ImportError:
+        raise ImportError(
+            "make_terrain requires the 'noise' package: pip install noise"
+        )
 
     if da is None:
         raise Exception("make terrain requires dask.Array (pip install dask)")
