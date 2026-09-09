@@ -521,7 +521,7 @@ def test_res_passthrough_unchanged():
 def test_no_res_attr_stays_absent():
     """preview should not invent a res when the input never had one."""
     data = np.random.default_rng(1).random((200, 400)).astype(np.float32)
-    agg = create_test_raster(data, attrs={'crs': 'EPSG: 5070'})
+    agg = create_test_raster(data, attrs={'crs': 'EPSG:5070'})
     assert 'res' not in agg.attrs
     result = preview(agg, width=40)
     assert 'res' not in result.attrs

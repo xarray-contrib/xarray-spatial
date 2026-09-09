@@ -891,7 +891,7 @@ def _tc_band(backend):
     data = np.random.default_rng(3429).random((6, 6)).astype(np.float32)
     return create_test_raster(
         data, backend=backend, dims=['lat', 'lon'],
-        attrs={'res': (0.5, 0.5), 'crs': 'EPSG: 5070'},
+        attrs={'res': (0.5, 0.5), 'crs': 'EPSG:5070'},
     )
 
 
