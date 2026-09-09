@@ -613,6 +613,16 @@ def test_invalid_target_values_shape(bad):
         surface_distance(source, elev, target_values=bad)
 
 
+@pytest.mark.parametrize("func", [surface_distance, surface_allocation, surface_direction])
+def test_target_values_none_matches_empty(func):
+    """target_values=None must behave like the [] default (issue #3712)."""
+    source = _make_raster(np.array([[0.0, 1.0, 0.0, 2.0, 0.0]], dtype=np.float64))
+    elev = _make_raster(np.zeros((1, 5), dtype=np.float64))
+    expected = _compute(func(source, elev))
+    got = _compute(func(source, elev, target_values=None))
+    np.testing.assert_array_equal(np.asarray(got), np.asarray(expected))
+
+
 # ---------------------------------------------------------------------------
 # Tests — dask-specific
 # ---------------------------------------------------------------------------
