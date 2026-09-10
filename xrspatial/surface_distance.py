@@ -1383,6 +1383,9 @@ def _compute(raster, elevation, x, y, target_values, max_distance,
     signed_cellsize_x = cellsize_x * _coord_step_sign(raster, x)
     signed_cellsize_y = cellsize_y * _coord_step_sign(raster, y)
 
+    if target_values is None:
+        target_values = []
+
     target_values = np.asarray(target_values, dtype=np.float64)
     if target_values.ndim != 1:
         raise ValueError(
@@ -1528,7 +1531,7 @@ def surface_distance(
     elevation: xr.DataArray,
     x: str = "x",
     y: str = "y",
-    target_values: list = [],
+    target_values: list = None,
     max_distance: float = np.inf,
     connectivity: int = 8,
     method: str = 'planar',
@@ -1584,7 +1587,7 @@ def surface_allocation(
     elevation: xr.DataArray,
     x: str = "x",
     y: str = "y",
-    target_values: list = [],
+    target_values: list = None,
     max_distance: float = np.inf,
     connectivity: int = 8,
     method: str = 'planar',
@@ -1621,7 +1624,7 @@ def surface_direction(
     elevation: xr.DataArray,
     x: str = "x",
     y: str = "y",
-    target_values: list = [],
+    target_values: list = None,
     max_distance: float = np.inf,
     connectivity: int = 8,
     method: str = 'planar',
