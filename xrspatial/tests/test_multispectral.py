@@ -115,17 +115,19 @@ def swir2_data(backend):
 @pytest.fixture
 def qgis_arvi():
     # this result is obtained by using NIR, red and blue band data
-    # running through QGIS Raster Calculator with formula:
-    # arvi = (nir - 2*red + blue) / (nir + 2*red + blue)
+    # with the Kaufman & Tanre (1992) formula for gamma = 1:
+    # arvi = (nir - 2*red + blue) / (nir + 2*red - blue)
+    # The values were recomputed in NumPy float64 for #3747; the earlier
+    # QGIS Raster Calculator run used "+ blue" in the denominator.
     result = np.array([
-        [np.nan, 0.09832155, 0.0956943, 0.0688592],
-        [0.08880479, 0.09804352, 0.09585208, np.nan],
-        [0.10611779, 0.1164153, 0.11244237, 0.09396376],
-        [0.0906375, 0.11409396, 0.12842213, 0.10752644],
-        [0.08580945, 0.09740005, 0.1179347, 0.10302287],
-        [0.08125288, 0.09465021, 0.1028627, 0.09022958],
-        [0.07825362, 0.08776391, 0.09236357, 0.08790172],
-        [0.07324535, 0.08831083, np.nan, 0.09074763]], dtype=np.float32)
+        [np.nan, 0.16419983, 0.15891543, 0.11366721],
+        [0.14871038, 0.16357109, 0.15873525, np.nan],
+        [0.17576507, 0.19264993, 0.18389326, 0.15350595],
+        [0.151602, 0.18874006, 0.20965737, 0.175228],
+        [0.1443527, 0.16261764, 0.19390513, 0.16783124],
+        [0.1376685, 0.15873715, 0.1707492, 0.14709426],
+        [0.13316649, 0.14795786, 0.15394595, 0.14455132],
+        [0.12511197, 0.14917128, np.nan, 0.1497453]], dtype=np.float32)
     return result
 
 
@@ -298,7 +300,8 @@ def data_uint_dtype_arvi(dtype):
     nir = xr.DataArray(np.array([[1, 1], [1, 1]], dtype=dtype))
     red = xr.DataArray(np.array([[0, 1], [0, 2]], dtype=dtype))
     blue = xr.DataArray(np.array([[0, 2], [1, 2]], dtype=dtype))
-    result = np.array([[1, 0.2], [1, -0.14285715]], dtype=np.float32)
+    # [1, 0] has nir + 2*red - blue == 0, so it comes back NaN.
+    result = np.array([[1, 1], [np.nan, -0.33333334]], dtype=np.float32)
     return nir, red, blue, result
 
 
@@ -489,6 +492,17 @@ def test_arvi_uint_dtype(data_uint_dtype_arvi):
 def test_arvi_gpu(nir_data, red_data, blue_data, qgis_arvi):
     result = arvi(nir_data, red_data, blue_data)
     general_output_checks(nir_data, result, qgis_arvi)
+
+
+def test_arvi_matches_kaufman_tanre_3747():
+    # Kaufman & Tanre (1992), gamma = 1: rb = 2*red - blue = 0.15,
+    # arvi = (nir - rb) / (nir + rb) = 0.35 / 0.65. The denominator used
+    # to add blue, which gave 0.4667 here.
+    nir = xr.DataArray(np.array([[0.5]]))
+    red = xr.DataArray(np.array([[0.1]]))
+    blue = xr.DataArray(np.array([[0.05]]))
+    result = arvi(nir, red, blue)
+    np.testing.assert_allclose(result.data, [[0.35 / 0.65]], rtol=1e-6)
 
 
 # EVI -------------

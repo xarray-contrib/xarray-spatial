@@ -109,7 +109,7 @@ def _arvi_cpu(nir_data, red_data, blue_data):
             red = red_data[y, x]
             blue = blue_data[y, x]
             numerator = (nir - (2.0 * red) + blue)
-            denominator = (nir + (2.0 * red) + blue)
+            denominator = (nir + (2.0 * red) - blue)
             if denominator != 0.0:
                 out[y, x] = numerator / denominator
 
@@ -124,7 +124,7 @@ def _arvi_gpu(nir_data, red_data, blue_data, out):
         red = red_data[y, x]
         blue = blue_data[y, x]
         numerator = (nir - (2.0 * red) + blue)
-        denominator = (nir + (2.0 * red) + blue)
+        denominator = (nir + (2.0 * red) - blue)
         if denominator != 0.0:
             out[y, x] = numerator / denominator
 
@@ -161,6 +161,11 @@ def arvi(nir_agg: xr.DataArray,
     molecular and ozone correction with no further need for aerosol
     correction, except for dust conditions.
 
+    The red band is replaced by ``rb = red - gamma * (blue - red)`` with
+    ``gamma = 1``, so ``arvi = (nir - rb) / (nir + rb)``, which is
+    ``(nir - 2 * red + blue) / (nir + 2 * red - blue)``. Cells where the
+    denominator is zero are NaN.
+
     Parameters
     ----------
     nir_agg : xarray.DataArray
@@ -186,6 +191,9 @@ def arvi(nir_agg: xr.DataArray,
     References
     ----------
         - MODIS: https://modis.gsfc.nasa.gov/sci_team/pubs/abstract_new.php?id=03667 # noqa
+        - Kaufman, Y. J. and Tanre, D. (1992). Atmospherically resistant
+          vegetation index (ARVI) for EOS-MODIS. IEEE Transactions on
+          Geoscience and Remote Sensing, 30(2), 261-270.
 
     Examples
     --------
@@ -223,9 +231,9 @@ def arvi(nir_agg: xr.DataArray,
          [1241. 1249. 1280. 1309.]
          [1239. 1257. 1322. 1329.]]
         >>> print(arvi_agg[y1:y2, x1:x2].data)
-        [[ 0.02676934  0.02135493  0.01052632  0.01798942]
-         [ 0.02130841  0.01114413 -0.0042343   0.01214013]
-         [ 0.02488688  0.00816024  0.00068681  0.02650602]]
+        [[ 0.05048409  0.04011065  0.01932045  0.03315995]
+         [ 0.03974896  0.02079002 -0.00772201  0.02223634]
+         [ 0.04670913  0.01528839  0.00125786  0.04885787]]
     """
 
     _validate_raster(nir_agg, func_name='arvi', name='nir_agg')
