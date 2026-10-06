@@ -166,6 +166,10 @@ def arvi(nir_agg: xr.DataArray,
     ``(nir - 2 * red + blue) / (nir + 2 * red - blue)``. Cells where the
     denominator is zero are NaN.
 
+    The result is not limited to [-1, 1]. Where ``blue > 2 * red``
+    (water, haze, snow) ``rb`` is negative, so values go above 1 and
+    get very large in magnitude as ``nir + rb`` approaches zero.
+
     Parameters
     ----------
     nir_agg : xarray.DataArray

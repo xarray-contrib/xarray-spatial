@@ -113,7 +113,7 @@ def swir2_data(backend):
 
 
 @pytest.fixture
-def qgis_arvi():
+def reference_arvi():
     # this result is obtained by using NIR, red and blue band data
     # with the Kaufman & Tanre (1992) formula for gamma = 1:
     # arvi = (nir - 2*red + blue) / (nir + 2*red - blue)
@@ -475,9 +475,9 @@ def test_savi_formula_1094(backend):
 
 # arvi -------------
 @pytest.mark.parametrize("backend", ["numpy", "dask+numpy"])
-def test_arvi_cpu_against_qgis(nir_data, red_data, blue_data, qgis_arvi):
+def test_arvi_cpu_against_reference(nir_data, red_data, blue_data, reference_arvi):
     result = arvi(nir_data, red_data, blue_data)
-    general_output_checks(nir_data, result, qgis_arvi)
+    general_output_checks(nir_data, result, reference_arvi)
 
 
 @pytest.mark.parametrize("dtype", ["uint8", "uint16"])
@@ -489,20 +489,30 @@ def test_arvi_uint_dtype(data_uint_dtype_arvi):
 
 @cuda_and_cupy_available
 @pytest.mark.parametrize("backend", ["cupy", "dask+cupy"])
-def test_arvi_gpu(nir_data, red_data, blue_data, qgis_arvi):
+def test_arvi_gpu(nir_data, red_data, blue_data, reference_arvi):
     result = arvi(nir_data, red_data, blue_data)
-    general_output_checks(nir_data, result, qgis_arvi)
+    general_output_checks(nir_data, result, reference_arvi)
 
 
-def test_arvi_matches_kaufman_tanre_3747():
-    # Kaufman & Tanre (1992), gamma = 1: rb = 2*red - blue = 0.15,
-    # arvi = (nir - rb) / (nir + rb) = 0.35 / 0.65. The denominator used
-    # to add blue, which gave 0.4667 here.
-    nir = xr.DataArray(np.array([[0.5]]))
-    red = xr.DataArray(np.array([[0.1]]))
-    blue = xr.DataArray(np.array([[0.05]]))
+@pytest.mark.parametrize("backend", [
+    "numpy",
+    "dask+numpy",
+    pytest.param("cupy", marks=cuda_and_cupy_available),
+    pytest.param("dask+cupy", marks=cuda_and_cupy_available),
+])
+def test_arvi_matches_kaufman_tanre_3747(backend):
+    # Kaufman & Tanre (1992), gamma = 1: rb = 2*red - blue,
+    # arvi = (nir - rb) / (nir + rb). The denominator used to add blue.
+    # Cell 0 is the case from #3747: rb = 0.15, arvi = 0.35 / 0.65
+    # (the old formula gave 0.4667).
+    # Cell 1 has blue > 2*red, so rb = -0.02 and arvi = 0.32 / 0.28,
+    # which is above 1. That is what the formula gives.
+    nir = create_test_raster(np.array([[0.5, 0.30]]), backend=backend)
+    red = create_test_raster(np.array([[0.1, 0.05]]), backend=backend)
+    blue = create_test_raster(np.array([[0.05, 0.12]]), backend=backend)
+    expected = np.array([[0.35 / 0.65, 0.32 / 0.28]], dtype=np.float32)
     result = arvi(nir, red, blue)
-    np.testing.assert_allclose(result.data, [[0.35 / 0.65]], rtol=1e-6)
+    general_output_checks(nir, result, expected)
 
 
 # EVI -------------
