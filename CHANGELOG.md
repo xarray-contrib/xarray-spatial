@@ -2,6 +2,22 @@
 -----------
 
 
+### Version 0.10.19 - 2026-10-07
+
+#### Bug fixes and improvements
+- multispectral: subtract blue in the ARVI denominator instead of adding it; every arvi() result changes (#3748)
+- surface_distance: let the GPU relaxation run to convergence instead of stopping at H + W passes and returning NaN for reachable pixels (#3732)
+- surface_distance: sort imports with isort (#3715)
+- proximity: speed up the brute-force kernel with per-metric inner loops and parallel rows (#3744)
+- slope: drop the per-cell NaN early-out in the planar CPU kernel and benchmark the nodata path (#3742)
+- hotspots: replace the nine-branch confidence ladder with boolean arithmetic (#3741)
+- hydro: replace the D8 code-to-offset if/elif chain with a lookup table (#3743)
+- tests: fix the fixture CRS string that pyproj 3.8.0 rejects (#3745)
+
+#### Thanks
+Thanks to @rmz-oz for reporting the ARVI denominator bug (#3747).
+
+
 ### Version 0.10.18 - 2026-08-27
 
 #### New features
