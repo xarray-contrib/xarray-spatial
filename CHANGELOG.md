@@ -2,6 +2,14 @@
 -----------
 
 
+### Version 0.10.20 - 2026-10-26
+
+#### Bug fixes and improvements
+- packaging: require NumPy 2.0 or newer and raise ImportError at import time when an older NumPy is installed; numba, scipy, and pandas floors move to 0.60, 1.13, and 2.2.2 (#3754)
+- packaging: lift the NumPy cap to <2.6 and test on Python 3.15 (#3753)
+- README: shorten the AI assistance notice (#3756)
+
+
 ### Version 0.10.19 - 2026-10-07
 
 #### Bug fixes and improvements
