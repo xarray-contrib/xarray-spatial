@@ -46,7 +46,7 @@ def get_xr_dataarray(
     if type == "numpy":
         pass
     elif type == "cupy":
-        if not has_cuda_and_cupy:
+        if not has_cuda_and_cupy():
             raise NotImplementedError()
         import cupy
         z = cupy.asarray(z)
