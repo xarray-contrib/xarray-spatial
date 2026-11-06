@@ -2267,8 +2267,7 @@ def test_crop_zone_ids_does_not_warn():
         warnings.simplefilter("always")
         crop(raster, raster, zone_ids=(1, 3))
 
-    dep = [w for w in caught if issubclass(w.category, DeprecationWarning)
-           and "zones_ids" in str(w.message)]
+    dep = [w for w in caught if issubclass(w.category, DeprecationWarning)]
     assert dep == [], (
         f"Expected no DeprecationWarning for zone_ids, got: "
         f"{[str(w.message) for w in dep]}"
