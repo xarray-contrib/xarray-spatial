@@ -3699,39 +3699,19 @@ class TestVerticalShift:
                       source_vertical_crs='egm96',  # case-sensitive
                       target_vertical_crs='ellipsoidal')
 
-    def test_deprecated_vertical_kwargs_still_work(self):
-        """Old src_/tgt_vertical_crs names map to the new ones with a warning.
-
-        Renamed to source_/target_vertical_crs for consistency with the
-        source_crs/target_crs spelling (#2613). The old names stay working
-        through a deprecation shim.
-        """
+    def test_old_vertical_kwarg_names_removed(self):
+        """src_/tgt_vertical_crs were deprecated in 0.10.x (#2613) and
+        removed in 1.0.0 (#3763); they now fail like any unknown kwarg."""
         from xrspatial.reproject import reproject
         raster = self._ny_raster(value=100.0)
-        new = reproject(raster, 'EPSG:4326',
-                        source_vertical_crs='EGM96',
-                        target_vertical_crs='ellipsoidal')
-        with pytest.warns(DeprecationWarning, match="src_vertical_crs"):
-            old_src = reproject(raster, 'EPSG:4326',
-                                src_vertical_crs='EGM96',
-                                target_vertical_crs='ellipsoidal')
-        with pytest.warns(DeprecationWarning, match="tgt_vertical_crs"):
-            old_tgt = reproject(raster, 'EPSG:4326',
-                                source_vertical_crs='EGM96',
-                                tgt_vertical_crs='ellipsoidal')
-        np.testing.assert_array_equal(old_src.values, new.values)
-        np.testing.assert_array_equal(old_tgt.values, new.values)
-
-    def test_deprecated_and_new_vertical_kwarg_conflict(self):
-        """Passing both the old and new spelling for one side is an error."""
-        from xrspatial.reproject import reproject
-        raster = self._ny_raster(value=100.0)
-        with pytest.warns(DeprecationWarning):
-            with pytest.raises(TypeError, match="not both"):
-                reproject(raster, 'EPSG:4326',
-                          source_vertical_crs='EGM96',
-                          src_vertical_crs='EGM96',
-                          target_vertical_crs='ellipsoidal')
+        with pytest.raises(TypeError, match="src_vertical_crs"):
+            reproject(raster, 'EPSG:4326',
+                      src_vertical_crs='EGM96',
+                      target_vertical_crs='ellipsoidal')
+        with pytest.raises(TypeError, match="tgt_vertical_crs"):
+            reproject(raster, 'EPSG:4326',
+                      source_vertical_crs='EGM96',
+                      tgt_vertical_crs='ellipsoidal')
 
     def test_dask_backend_matches_numpy(self):
         """Dask-backed input must apply the vertical shift correctly (#2025).

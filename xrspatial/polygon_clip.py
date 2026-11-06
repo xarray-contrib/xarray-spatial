@@ -220,11 +220,7 @@ def clip_polygon(
         # the task graph that xarray.where then has to align (#3191).
         kw.setdefault('chunks', (max(rc), max(cc)))
         if has_cuda_and_cupy() and is_dask_cupy(raster):
-            # Respect a legacy ``use_cuda`` passed via rasterize_kw --
-            # defaulting ``gpu`` as well would make rasterize() see both
-            # names and raise.
-            if 'use_cuda' not in kw:
-                kw.setdefault('gpu', True)
+            kw.setdefault('gpu', True)
 
     mask = rasterize(geom_pairs, **kw)
 

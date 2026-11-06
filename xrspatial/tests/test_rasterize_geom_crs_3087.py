@@ -167,7 +167,7 @@ class TestGeomCrsPropagation:
     def test_cupy_backend(self):
         result = rasterize(
             _gdf(crs='EPSG:32610'), width=10, height=10,
-            bounds=(0, 0, 10, 10), column='value', fill=0, use_cuda=True,
+            bounds=(0, 0, 10, 10), column='value', fill=0, gpu=True,
         )
         assert result.attrs.get('crs') == 32610
 
@@ -177,6 +177,6 @@ class TestGeomCrsPropagation:
         result = rasterize(
             _gdf(crs='EPSG:32610'), width=10, height=10,
             bounds=(0, 0, 10, 10), column='value', fill=0,
-            use_cuda=True, chunks=5,
+            gpu=True, chunks=5,
         )
         assert result.attrs.get('crs') == 32610

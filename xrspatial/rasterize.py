@@ -4139,7 +4139,6 @@ def rasterize(
     chunks: Optional[Union[int, Tuple[int, int]]] = None,
     max_pixels: int = MAX_PIXELS_DEFAULT,
     check_crs: bool = True,
-    use_cuda: Optional[bool] = None,
 ) -> xr.DataArray:
     """Rasterize vector geometries into a 2D DataArray.
 
@@ -4337,10 +4336,6 @@ def rasterize(
         them yourself to match the template.  Pass ``check_crs=False`` to
         skip the comparison (the output still inherits the template CRS).
         The check is a no-op when either side lacks a CRS.
-    use_cuda : bool, optional
-        Deprecated alias for ``gpu``; emits a ``DeprecationWarning``
-        when passed.  Passing both ``gpu=True`` and ``use_cuda`` raises
-        ``TypeError``.
 
     Returns
     -------
@@ -4374,22 +4369,6 @@ def rasterize(
         >>> density = rasterize(gdf, width=100, height=100,
         ...                     column='pop', merge='sum', fill=0)
     """
-    # Deprecation shim: ``use_cuda`` was renamed to ``gpu`` so the GPU
-    # opt-in matches ``open_geotiff(gpu=True)`` (issue #3089).  The old
-    # keyword still works but warns; asking for both is ambiguous.
-    if use_cuda is not None:
-        if gpu:
-            raise TypeError(
-                "rasterize() got both 'gpu' and its deprecated alias "
-                "'use_cuda'; pass only 'gpu'")
-        warnings.warn(
-            "rasterize(use_cuda=...) is deprecated; use gpu=... instead "
-            "(same convention as open_geotiff).",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        gpu = use_cuda
-
     # Fail early with a clear message if the optional ``vector`` extra
     # (shapely) is not installed, rather than deep inside a helper.
     _require_shapely()

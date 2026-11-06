@@ -2391,8 +2391,8 @@ class TestOWAMemoryGuard:
 
 
 class TestOWAWeightsParam3148:
-    """owa() takes its criterion-weight dict as `weights` like wlc/wpm,
-    with `criterion_weights` kept as a deprecated alias."""
+    """owa() takes its criterion-weight dict as `weights` like wlc/wpm.
+    The `criterion_weights` alias was removed in 1.0.0 (#3763)."""
 
     def test_weights_keyword(self, criteria_dataset, weights_3):
         result = owa(
@@ -2401,21 +2401,10 @@ class TestOWAWeightsParam3148:
         expected = owa(criteria_dataset, weights_3, [0.5, 0.3, 0.2])
         np.testing.assert_allclose(result.values, expected.values)
 
-    def test_criterion_weights_deprecated(self, criteria_dataset, weights_3):
-        with pytest.warns(DeprecationWarning, match="criterion_weights"):
-            result = owa(
-                criteria_dataset,
-                criterion_weights=weights_3,
-                order_weights=[0.5, 0.3, 0.2],
-            )
-        expected = owa(criteria_dataset, weights_3, [0.5, 0.3, 0.2])
-        np.testing.assert_allclose(result.values, expected.values)
-
-    def test_both_names_raise(self, criteria_dataset, weights_3):
-        with pytest.raises(TypeError, match="both"):
+    def test_criterion_weights_removed(self, criteria_dataset, weights_3):
+        with pytest.raises(TypeError, match="criterion_weights"):
             owa(
                 criteria_dataset,
-                weights=weights_3,
                 criterion_weights=weights_3,
                 order_weights=[0.5, 0.3, 0.2],
             )

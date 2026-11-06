@@ -1,11 +1,9 @@
 """Issue #3089: rasterize() renamed its GPU opt-in from ``use_cuda`` to
 ``gpu`` to match ``open_geotiff(gpu=True)``.
 
-``use_cuda`` stays as a deprecated keyword alias: it still selects the GPU
-backend but emits a ``DeprecationWarning``, and combining it with
-``gpu=True`` raises ``TypeError``.  These tests pin the shim and the
-positional-compatibility guarantee (``gpu`` occupies the slot ``use_cuda``
-used to, so positional callers are unaffected).
+The ``use_cuda`` alias was deprecated through 0.10.x and removed in 1.0.0
+(#3763).  These tests pin the positional-compatibility guarantee (``gpu``
+occupies the slot ``use_cuda`` used to) and that the old name is gone.
 """
 import inspect
 import warnings
@@ -59,8 +57,7 @@ def test_gpu_is_tenth_positional_param():
     positional callers keep selecting the GPU backend."""
     params = list(inspect.signature(rasterize).parameters)
     assert params[9] == 'gpu'
-    # the deprecated alias is appended last so it shifts nothing
-    assert params[-1] == 'use_cuda'
+    assert 'use_cuda' not in params
 
 
 def test_default_emits_no_deprecation_warning():
@@ -69,17 +66,10 @@ def test_default_emits_no_deprecation_warning():
         rasterize(_pairs(), **_kw())
 
 
-def test_use_cuda_false_warns_and_runs_cpu():
-    with pytest.warns(DeprecationWarning, match='use gpu='):
-        result = rasterize(_pairs(), use_cuda=False, **_kw())
-    assert isinstance(result.data, np.ndarray)
-
-
-def test_gpu_true_and_use_cuda_raises():
-    with pytest.raises(TypeError, match="deprecated alias"):
-        rasterize(_pairs(), gpu=True, use_cuda=True, **_kw())
-    with pytest.raises(TypeError, match="deprecated alias"):
-        rasterize(_pairs(), gpu=True, use_cuda=False, **_kw())
+def test_use_cuda_removed():
+    """The 0.x alias is gone in 1.0: plain unexpected-keyword TypeError."""
+    with pytest.raises(TypeError, match="use_cuda"):
+        rasterize(_pairs(), use_cuda=False, **_kw())
 
 
 @requires_gpu
@@ -91,28 +81,15 @@ def test_gpu_true_matches_numpy():
 
 
 @requires_gpu
-def test_use_cuda_true_warns_and_matches_gpu_true():
-    expected = rasterize(_pairs(), gpu=True, **_kw())
-    with pytest.warns(DeprecationWarning, match='use gpu='):
-        result = rasterize(_pairs(), use_cuda=True, **_kw())
-    assert isinstance(result.data, cupy.ndarray)
-    np.testing.assert_array_equal(_to_numpy(result), _to_numpy(expected))
-
-
-@requires_gpu
-def test_dask_cupy_via_gpu_and_alias():
+def test_dask_cupy_via_gpu():
     import dask.array as da
 
+    expected = rasterize(_pairs(), gpu=True, **_kw())
     lazy = rasterize(_pairs(), gpu=True, chunks=5, **_kw())
     assert isinstance(lazy.data, da.Array)
     assert isinstance(lazy.data._meta, cupy.ndarray)
-
-    with pytest.warns(DeprecationWarning, match='use gpu='):
-        lazy_alias = rasterize(_pairs(), use_cuda=True, chunks=5, **_kw())
-    assert isinstance(lazy_alias.data._meta, cupy.ndarray)
-
     np.testing.assert_array_equal(
-        _to_numpy(lazy.compute()), _to_numpy(lazy_alias.compute()))
+        _to_numpy(lazy.compute()), _to_numpy(expected))
 
 
 @requires_gpu

@@ -6,7 +6,6 @@ layers and return a single composite ``xr.DataArray``.
 
 from __future__ import annotations
 
-import warnings
 
 import numpy as np
 import xarray as xr
@@ -253,11 +252,9 @@ def wpm(
 
 def owa(
     criteria: xr.Dataset,
-    weights: dict[str, float] | None = None,
+    weights: dict[str, float],
     order_weights: list[float] | None = None,
     name: str = "owa",
-    *,
-    criterion_weights: dict[str, float] | None = None,
 ) -> xr.DataArray:
     """Ordered Weighted Averaging.
 
@@ -272,37 +269,18 @@ def owa(
     weights : dict
         Criterion weights as ``{criterion_name: weight}``, must sum
         to ~1.0. Same convention as :func:`wlc` and :func:`wpm`.
-        Required; the ``None`` default exists only to support the
-        deprecated ``criterion_weights`` alias.
     order_weights : list of float
         Weights applied by rank position (index 0 = highest value).
         Must have the same length as the number of criteria and
         sum to ~1.0.
     name : str
         Name of the output DataArray.
-    criterion_weights : dict, optional
-        Deprecated alias for ``weights``. Emits ``DeprecationWarning``.
 
     Returns
     -------
     xr.DataArray
         Composite suitability surface.
     """
-    if criterion_weights is not None:
-        if weights is not None:
-            raise TypeError(
-                "owa() got values for both 'weights' and its deprecated "
-                "alias 'criterion_weights'"
-            )
-        warnings.warn(
-            "The 'criterion_weights' argument of owa() is deprecated; "
-            "use 'weights' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        weights = criterion_weights
-    if weights is None:
-        raise TypeError("owa() missing required argument: 'weights'")
     if order_weights is None:
         raise TypeError("owa() missing required argument: 'order_weights'")
 
