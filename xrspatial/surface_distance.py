@@ -47,15 +47,12 @@ except ImportError:
     class cupy:  # type: ignore[no-redef]
         ndarray = False
 
-from xrspatial.cost_distance import _heap_push, _heap_pop
-from xrspatial.proximity import _vectorized_calc_direction
-from xrspatial.utils import (
-    _validate_raster,
-    cuda_args, get_dataarray_resolution, ngjit,
-    has_cuda_and_cupy, is_cupy_array, is_dask_cupy,
-)
+from xrspatial.cost_distance import _heap_pop, _heap_push
 from xrspatial.dataset_support import supports_dataset
-from xrspatial.utils import _dask_task_name_kwargs
+from xrspatial.proximity import _vectorized_calc_direction
+from xrspatial.utils import (_dask_task_name_kwargs, _validate_raster, cuda_args,
+                             get_dataarray_resolution, has_cuda_and_cupy, is_cupy_array,
+                             is_dask_cupy, ngjit)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -331,6 +328,27 @@ def _dijkstra_geodesic(elev_data, height, width, max_distance,
 # ---------------------------------------------------------------------------
 
 
+def _coord_step_sign(raster, dim):
+    """Sign of the step along *dim* as the array index increases.
+
+    Returns -1.0 for a descending coordinate (the north-up convention on
+    the y axis), +1.0 otherwise.  Rasters without a usable coordinate on
+    *dim* fall back to +1.0, which is index order.
+
+    The axis is assumed monotonic, the same assumption ``calc_res``
+    already makes when it divides the coordinate span by ``n - 1``.
+    """
+    if dim not in raster.coords:
+        return 1.0
+    values = np.asarray(raster.coords[dim].values)
+    if values.ndim != 1 or values.size < 2:
+        return 1.0
+    if not np.issubdtype(values.dtype, np.number):
+        return 1.0
+    step = float(values[-1]) - float(values[0])
+    return -1.0 if step < 0 else 1.0
+
+
 def _init_arrays(H, W):
     """Create and initialize output arrays for the Dijkstra kernel."""
     dist = np.full((H, W), np.inf, dtype=np.float64)
@@ -360,7 +378,11 @@ def _finalize_direction(src_row, src_col, dist, cellsize_x, cellsize_y,
                         max_distance):
     """Compute compass bearing from each pixel to its allocated source.
 
-    Uses pixel index differences scaled by cell size.
+    Uses pixel index differences scaled by cell size.  *cellsize_x* and
+    *cellsize_y* are signed: their sign is the direction the matching
+    coordinate runs as the index rises, so a north-up raster (descending
+    y) gets a negative *cellsize_y* and the bearings come out in true
+    compass space rather than mirrored in index space.
     """
     H, W = dist.shape
     row_idx, col_idx = np.meshgrid(np.arange(H), np.arange(W), indexing='ij')
@@ -374,8 +396,14 @@ def _finalize_direction(src_row, src_col, dist, cellsize_x, cellsize_y,
         np.zeros((H, W), dtype=np.float64), dy,
     )
 
-    # Mask unreachable and no-source pixels
-    mask = np.isinf(dist) | (dist > max_distance) | (src_row < 0)
+    # Mask unreachable pixels.  Every pixel with a finite in-budget
+    # distance was assigned a source when that distance was written, so
+    # `dist` alone identifies them, and the direction output ends up with
+    # the same NaN mask as the distance and allocation outputs.  Testing
+    # `src_row < 0` instead would be wrong on the tiled dask path, where
+    # a source in a chunk above or to the left rebases to a legitimately
+    # negative block-local index.
+    mask = np.isinf(dist) | (dist > max_distance)
     result[mask] = np.nan
     return result
 
@@ -580,7 +608,15 @@ def _surface_distance_cupy(source_data, elev_data, cellsize_x, cellsize_y,
     changed = cp.zeros(1, dtype=cp.int32)
     griddim, blockdim = cuda_args((H, W))
 
-    max_iterations = H + W
+    # One pass moves distance information roughly one pixel hop, so the
+    # number of passes needed is the hop count of the longest shortest
+    # path.  On open terrain that is about H + W, but NaN barriers make
+    # paths wind, and the Bellman-Ford bound for a grid graph is the
+    # pixel count.  The `changed` check below exits as soon as the
+    # solution settles, so the ceiling only costs anything on the
+    # pathological inputs that need it.
+    max_iterations = H * W
+    converged = False
     for _ in range(max_iterations):
         changed[0] = 0
         _sd_relax_kernel[griddim, blockdim](
@@ -590,7 +626,18 @@ def _surface_distance_cupy(source_data, elev_data, cellsize_x, cellsize_y,
             np.float64(max_distance),
         )
         if int(changed[0]) == 0:
+            converged = True
             break
+
+    if not converged:
+        warnings.warn(
+            f"surface_distance: the GPU relaxation was still improving "
+            f"distances after {max_iterations} passes on a {H}x{W} raster "
+            f"and was stopped.  Some pixels may be reported as unreachable "
+            f"when a path exists.  Please report this raster upstream.",
+            UserWarning,
+            stacklevel=4,
+        )
 
     # Extract output
     if mode == DISTANCE:
@@ -610,8 +657,10 @@ def _surface_distance_cupy(source_data, elev_data, cellsize_x, cellsize_y,
         dy_np = cp.asnumpy(dy_coord)
         zeros = np.zeros((H, W), dtype=np.float64)
         result = _vectorized_calc_direction(zeros, dx_np, zeros, dy_np)
-        mask_np = cp.asnumpy(cp.isinf(dist) | (dist > max_distance)
-                             | (srow < 0))
+        # Same rule as _finalize_direction: a finite in-budget distance
+        # always came with an assigned source, so `dist` alone marks the
+        # unreachable pixels and all three outputs share one NaN mask.
+        mask_np = cp.asnumpy(cp.isinf(dist) | (dist > max_distance))
         result[mask_np] = np.nan
         out = cp.asarray(result)
 
@@ -1174,6 +1223,15 @@ def _assemble_sd(source_da, elev_da, boundaries, elev_bdry,
             max_distance, dy, dx, dd, row_offset, col_offset,
         )
 
+        # _run_tile tracks sources in global raster indices so seeds stay
+        # comparable across tiles, but _finalize_direction measures the
+        # offset against this block's own np.arange grid.  Rebase to
+        # block-local indices so the two sides agree; a source outside
+        # this block lands outside [0, h) x [0, w), which is exactly the
+        # relative offset the bearing needs.
+        srow = srow - row_offset
+        scol = scol - col_offset
+
         return _extract_output(dist, alloc_arr, srow, scol,
                                cellsize_x, cellsize_y, max_distance, mode)
 
@@ -1315,8 +1373,35 @@ def _compute(raster, elevation, x, y, target_values, max_distance,
     cellsize_x = abs(float(cellsize_x))
     cellsize_y = abs(float(cellsize_y))
 
+    # The DIRECTION output is a compass bearing, so it needs to know which
+    # way each axis runs; the edge costs below only ever use squared or
+    # already-absolute cell sizes, so the signed values are what the
+    # backends carry (see _finalize_direction).
+    signed_cellsize_x = cellsize_x * _coord_step_sign(raster, x)
+    signed_cellsize_y = cellsize_y * _coord_step_sign(raster, y)
+
     target_values = np.asarray(target_values, dtype=np.float64)
+    if target_values.ndim != 1:
+        raise ValueError(
+            "target_values must be a 1-D sequence of numbers, got "
+            "{0}-D input {1!r}.".format(target_values.ndim,
+                                        target_values.tolist())
+        )
+
     max_distance_f = float(max_distance)
+    # NaN defeats both bound tests: the numba kernel's `cost_u >
+    # max_distance` break and the CUDA kernel's `best <= max_distance`
+    # accept.  The first falls through and searches without a bound, the
+    # second rejects every relaxation, so the same call returns a full
+    # distance surface on numpy and a seeds-only raster on cupy.  A
+    # negative budget masks even the zero-distance sources on numpy/cupy
+    # and reaches dask as a negative map_overlap depth.  Reject both,
+    # matching proximity()'s guard.
+    if np.isnan(max_distance_f) or max_distance_f < 0:
+        raise ValueError(
+            "max_distance must be non-negative, got {0!r}.".format(
+                max_distance)
+        )
 
     # Build neighbour offsets
     if connectivity == 8:
@@ -1371,7 +1456,7 @@ def _compute(raster, elevation, x, y, target_values, max_distance,
             raise NotImplementedError(
                 "geodesic mode is not yet supported for CuPy arrays")
         result_data = _surface_distance_cupy(
-            source_data, elev_data, cellsize_x, cellsize_y,
+            source_data, elev_data, signed_cellsize_x, signed_cellsize_y,
             max_distance_f, target_values, dy_arr, dx_arr, dd_arr, mode,
         )
     elif _is_dask_cupy_flag:
@@ -1379,20 +1464,20 @@ def _compute(raster, elevation, x, y, target_values, max_distance,
             raise NotImplementedError(
                 "geodesic mode is not yet supported for Dask+CuPy arrays")
         result_data = _surface_distance_dask_cupy(
-            source_data, elev_data, cellsize_x, cellsize_y,
+            source_data, elev_data, signed_cellsize_x, signed_cellsize_y,
             max_distance_f, target_values, dy_arr, dx_arr, dd_arr, mode,
         )
     elif isinstance(source_data, np.ndarray):
         if isinstance(elev_data, np.ndarray):
             result_data = _surface_distance_numpy(
-                source_data, elev_data, cellsize_x, cellsize_y,
+                source_data, elev_data, signed_cellsize_x, signed_cellsize_y,
                 max_distance_f, target_values, dy_arr, dx_arr, dd_arr,
                 dd_grid, use_geodesic, mode,
             )
         else:
             elev_np = np.asarray(elev_data)
             result_data = _surface_distance_numpy(
-                source_data, elev_np, cellsize_x, cellsize_y,
+                source_data, elev_np, signed_cellsize_x, signed_cellsize_y,
                 max_distance_f, target_values, dy_arr, dx_arr, dd_arr,
                 dd_grid, use_geodesic, mode,
             )
@@ -1401,7 +1486,7 @@ def _compute(raster, elevation, x, y, target_values, max_distance,
             raise NotImplementedError(
                 "geodesic mode is not yet supported for Dask arrays")
         result_data = _surface_distance_dask(
-            source_data, elev_data, cellsize_x, cellsize_y,
+            source_data, elev_data, signed_cellsize_x, signed_cellsize_y,
             max_distance_f, target_values, dy_arr, dx_arr, dd_arr, mode,
         )
     else:
@@ -1413,6 +1498,25 @@ def _compute(raster, elevation, x, y, target_values, max_distance,
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+
+def _wrap_result(result_data, raster):
+    """Wrap raw output in a DataArray carrying the input's spatial metadata.
+
+    The name is reset after construction: on dask backends
+    ``xr.DataArray(..., name=None)`` adopts the dask array's graph key
+    (``_trim-<hash>`` from map_overlap, ``xrspatial.surface_*-<hash>`` from
+    the iterative path) as ``.name``, while numpy and cupy return None.
+    Issue #3708; same fix as cost_distance #3344 and pathfinding #3652.
+    """
+    result = xr.DataArray(
+        result_data,
+        coords=raster.coords,
+        dims=raster.dims,
+        attrs=raster.attrs,
+    )
+    result.name = None
+    return result
 
 
 @supports_dataset
@@ -1515,12 +1619,7 @@ def surface_distance(
         raster, elevation, x, y, target_values, max_distance,
         connectivity, method, DISTANCE,
     )
-    return xr.DataArray(
-        result_data,
-        coords=raster.coords,
-        dims=raster.dims,
-        attrs=raster.attrs,
-    )
+    return _wrap_result(result_data, raster)
 
 
 @supports_dataset
@@ -1596,12 +1695,7 @@ def surface_allocation(
         raster, elevation, x, y, target_values, max_distance,
         connectivity, method, ALLOCATION,
     )
-    return xr.DataArray(
-        result_data,
-        coords=raster.coords,
-        dims=raster.dims,
-        attrs=raster.attrs,
-    )
+    return _wrap_result(result_data, raster)
 
 
 @supports_dataset
@@ -1688,9 +1782,4 @@ def surface_direction(
         raster, elevation, x, y, target_values, max_distance,
         connectivity, method, DIRECTION,
     )
-    return xr.DataArray(
-        result_data,
-        coords=raster.coords,
-        dims=raster.dims,
-        attrs=raster.attrs,
-    )
+    return _wrap_result(result_data, raster)
