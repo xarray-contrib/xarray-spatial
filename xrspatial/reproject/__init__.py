@@ -67,34 +67,6 @@ _VERTICAL_DATUM_EPSG = {
     'ellipsoidal': 4979,  # WGS 84 (3D, ellipsoidal height)
 }
 
-# Sentinel marking the deprecated ``src_vertical_crs`` / ``tgt_vertical_crs``
-# kwargs as "not passed". Distinct from None so we can tell an explicit
-# ``src_vertical_crs=None`` apart from the default and only warn when the
-# caller actually used the old name.
-_DEPRECATED = object()
-
-
-def _resolve_deprecated_vertical_kwarg(old_name, old_val, new_name, new_val):
-    """Map a deprecated vertical-CRS kwarg onto its renamed replacement.
-
-    Emits a ``DeprecationWarning`` when the old name is used and rejects
-    passing both the old and new spellings at once.
-    """
-    if old_val is _DEPRECATED:
-        return new_val
-    import warnings
-    warnings.warn(
-        f"reproject(): {old_name!r} is deprecated, use {new_name!r} instead.",
-        DeprecationWarning,
-        stacklevel=3,
-    )
-    if new_val is not None:
-        raise TypeError(
-            f"reproject(): pass either {new_name!r} or the deprecated "
-            f"{old_name!r}, not both."
-        )
-    return old_val
-
 
 def _find_spatial_dims(raster):
     """Find the y and x dimension names, handling multi-band rasters.
@@ -725,8 +697,6 @@ def reproject(
     source_vertical_crs=None,
     target_vertical_crs=None,
     bounds_policy="auto",
-    src_vertical_crs=_DEPRECATED,
-    tgt_vertical_crs=_DEPRECATED,
 ):
     """Reproject a raster DataArray to a new coordinate reference system.
 
@@ -788,12 +758,6 @@ def reproject(
     target_vertical_crs : str or None
         Target vertical datum. Same options as *source_vertical_crs*.
         Both must be set to trigger a vertical transformation.
-    src_vertical_crs : str or None
-        Deprecated alias for *source_vertical_crs*. Passing it emits a
-        ``DeprecationWarning``.
-    tgt_vertical_crs : str or None
-        Deprecated alias for *target_vertical_crs*. Passing it emits a
-        ``DeprecationWarning``.
     bounds_policy : {"auto", "raw", "clamp", "percentile"}, default "auto"
         How to derive the output extent from the source extent when
         ``bounds`` is not supplied. Only relevant when projecting near a
@@ -868,16 +832,6 @@ def reproject(
     >>> result.attrs['crs'].startswith(('PROJCRS', 'PROJCS'))
     True
     """
-    # Back-compat shim for the old abbreviated kwarg names. These were
-    # renamed to source_vertical_crs / target_vertical_crs to match the
-    # source_crs / target_crs spelling used by the rest of the signature.
-    source_vertical_crs = _resolve_deprecated_vertical_kwarg(
-        'src_vertical_crs', src_vertical_crs,
-        'source_vertical_crs', source_vertical_crs)
-    target_vertical_crs = _resolve_deprecated_vertical_kwarg(
-        'tgt_vertical_crs', tgt_vertical_crs,
-        'target_vertical_crs', target_vertical_crs)
-
     _validate_raster(raster, func_name='reproject', name='raster',
                      ndim=(2, 3))
 
