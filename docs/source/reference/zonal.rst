@@ -57,6 +57,7 @@ Zonal Statistics
     :toctree: _autosummary
 
     xrspatial.zonal.get_full_extent
+    xrspatial.zonal.hypsometric_integral
     xrspatial.zonal.stats
     xrspatial.zonal.suggest_zonal_canvas
 
