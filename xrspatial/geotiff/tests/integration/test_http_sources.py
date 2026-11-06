@@ -2168,7 +2168,7 @@ def test_install_requires_lists_urllib3():
         if line and not line.startswith((' ', '\t')):
             break
         block_lines.append(line.strip())
-    assert 'urllib3' in block_lines, (
+    assert any(line.split()[0] == 'urllib3' for line in block_lines if line), (
         f"urllib3 must be in install_requires; found: {block_lines}"
     )
 
