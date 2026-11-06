@@ -31,14 +31,14 @@ LAPLACIAN_KERNEL = np.array([[0,  1, 0],
 def _promote_wide_int(data):
     """Cast 32/64-bit integer arrays to float64 before convolution.
 
-    ``convolve_2d`` promotes integer inputs to float32, whose 24-bit
-    mantissa cannot represent integers above 2**24: unit steps between
-    large values vanish in the cast and gradients silently collapse to
-    zero (#3680). float64 is exact for every int32/uint32 value and for
-    int64/uint64 up to 2**53. 8- and 16-bit integers are exactly
-    representable in float32, so they keep ``convolve_2d``'s promotion.
-    Works on numpy, cupy, and dask arrays alike (``astype`` is lazy on
-    dask).
+    ``convolve_2d`` used to promote every integer input to float32, whose
+    24-bit mantissa cannot represent integers above 2**24: unit steps
+    between large values vanished in the cast and gradients silently
+    collapsed to zero (#3680). Since #3684 ``convolve_2d``'s own
+    ``_promote_float`` applies the same split (8/16-bit ints to float32,
+    wider ints to float64), so this pre-cast is redundant and kept only
+    so the edge detectors do not depend on that helper's rule. Works on
+    numpy, cupy, and dask arrays alike (``astype`` is lazy on dask).
     """
     if data.dtype.kind in 'iu' and data.dtype.itemsize > 2:
         return data.astype(np.float64)

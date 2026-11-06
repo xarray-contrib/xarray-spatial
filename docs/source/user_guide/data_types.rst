@@ -9,7 +9,7 @@ This guide explains how xarray-spatial handles floating-point data types (float3
 Overview
 ========
 
-xarray-spatial standardizes on **float32** (32-bit floating-point) for output data in most analytical functions. This design decision provides a balance between computational precision, memory efficiency, and performance that is well-suited for raster analysis tasks.
+xarray-spatial standardizes on **float32** (32-bit floating-point) for output data in most analytical functions (the focal and convolution functions are the exception for 32/64-bit integer input; see below). This design decision provides a balance between computational precision, memory efficiency, and performance that is well-suited for raster analysis tasks.
 
 .. warning::
 

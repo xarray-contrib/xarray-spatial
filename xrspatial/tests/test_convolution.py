@@ -48,30 +48,31 @@ def test_convolve_2d_promotion_rule_3684(dtype, expected):
     assert convolve_2d(data, KERNEL).dtype == expected
 
 
+@pytest.mark.parametrize("backend", ['numpy', 'dask+numpy', 'cupy', 'dask+cupy'])
 @pytest.mark.parametrize("dtype", [np.int32, np.int64])
-def test_convolution_2d_wide_int_exact_above_2_24_3684(dtype):
+def test_convolution_2d_wide_int_exact_above_2_24_3684(backend, dtype):
     # Regression for #3684: a horizontal-gradient kernel on an int32 raster
     # offset by 1e8 returned 0 because the float32 cast erased the unit
     # steps. Every backend must match the float64 reference exactly.
+    if 'cupy' in backend and not has_cuda_and_cupy():
+        pytest.skip("Requires CUDA and CuPy")
+
     base = 100_000_000
     data = (np.arange(30).reshape(5, 6) % 6 + base).astype(dtype)
     kernel = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=np.float64)
     expected = convolution_2d(create_test_raster(data.astype(np.float64)), kernel)
     assert expected.data[2, 2] == 8.0
 
-    backends = ['numpy', 'dask+numpy']
-    if has_cuda_and_cupy():
-        backends += ['cupy', 'dask+cupy']
-    for backend in backends:
-        agg = create_test_raster(data, backend=backend, chunks=(2, 3))
-        out = convolution_2d(agg, kernel).data
-        if hasattr(out, 'compute'):
-            out = out.compute()
-        if hasattr(out, 'get'):
-            out = out.get()
-        assert out.dtype == np.float64, backend
-        # exact, not allclose: at 1e8 a relative tolerance would hide the bug
-        np.testing.assert_array_equal(out, expected.data, err_msg=backend)
+    # chunks only applies to the dask backends; (2, 3) splits the 5x6 raster
+    agg = create_test_raster(data, backend=backend, chunks=(2, 3))
+    out = convolution_2d(agg, kernel).data
+    if hasattr(out, 'compute'):
+        out = out.compute()
+    if hasattr(out, 'get'):
+        out = out.get()
+    assert out.dtype == np.float64
+    # exact, not allclose: at 1e8 a relative tolerance would hide the bug
+    np.testing.assert_array_equal(out, expected.data)
 
 
 @cuda_and_cupy_available

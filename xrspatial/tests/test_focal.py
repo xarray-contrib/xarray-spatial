@@ -1021,6 +1021,7 @@ def test_mean_wide_int_exact_above_2_24_3684(backend, dtype):
 
     base = 100_000_000
     data = (np.arange(30).reshape(5, 6) % 6 + base).astype(dtype)
+    # chunks only applies to the dask backends; (2, 3) splits the 5x6 raster
     agg = create_test_raster(data, backend=backend, chunks=(2, 3))
     result = mean(agg)
     expected = mean(create_test_raster(data.astype(np.float64)))
