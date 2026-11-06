@@ -465,7 +465,7 @@ _FIXTURES: list[_FixtureSpec] = [
         expected_masked=False,
         source_type=_SRC_LOCAL_TIFF,
         builder=_build_int8_unmasked,
-        read_kwargs={"mask_nodata": False},
+        read_kwargs={"masked": False},
     ),
     _FixtureSpec(
         fix_id="cog-float32",

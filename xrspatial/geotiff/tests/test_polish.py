@@ -110,7 +110,7 @@ class TestC5WriteVrtKwargs:
         # Defensive: the docstring is the contract here -- guard
         # against future regressions.
         assert 'relative' in _build_vrt.__doc__
-        assert 'crs_wkt' in _build_vrt.__doc__
+        assert 'crs' in _build_vrt.__doc__
         assert 'nodata' in _build_vrt.__doc__
 
 

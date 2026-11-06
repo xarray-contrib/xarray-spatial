@@ -145,21 +145,8 @@ def test_write_geotiff_gpu_path_annotated():
 def test_write_vrt_path_annotated():
     """``_build_vrt(path, ...)`` is str-only (VRT writes are path-only by
     design; no file-like buffer support). The canonical name
-    is ``path`` (parity with ``to_geotiff`` / ``_write_geotiff_gpu``).
-    The annotation is plain ``str``: the default value is a private
-    sentinel (not ``None``) so the deprecation shim can distinguish
-    ``_build_vrt(path=None, ...)`` (rejected with TypeError) from a
-    caller who omitted ``path`` entirely (routed through the ``vrt_path``
-    alias)."""
+    is ``path`` (parity with ``to_geotiff`` / ``_write_geotiff_gpu``)."""
     assert _annotation(_build_vrt, 'path') == 'str'
-
-
-def test_write_vrt_vrt_path_annotated():
-    """The deprecated ``vrt_path`` alias keeps the same ``str | None``
-    annotation as ``path`` (str-only at the type level; ``None`` only
-    appears because the sentinel default lets the shim detect omission).
-    Pinned so a future re-rename does not silently widen the alias."""
-    assert _annotation(_build_vrt, 'vrt_path') == 'str | None'
 
 
 # --- source: str or BinaryIO (open_geotiff is the public dispatch) ---
@@ -227,12 +214,6 @@ def test_open_geotiff_on_gpu_failure_annotated():
 
 def test_read_geotiff_gpu_on_gpu_failure_annotated():
     assert _annotation(_read_geotiff_gpu, 'on_gpu_failure') == 'str'
-
-
-def test_read_geotiff_gpu_deprecated_gpu_alias_annotated():
-    """The deprecated ``gpu=`` alias on ``_read_geotiff_gpu`` carries the
-    same ``str`` annotation as the new ``on_gpu_failure`` kwarg."""
-    assert _annotation(_read_geotiff_gpu, 'gpu') == 'str'
 
 
 # --- nodata: float | int | None on every writer entry point ---
@@ -403,8 +384,8 @@ _CANONICAL_ORDER = (
     "bbox",
     "overview_level",
     "band",
-    # rioxarray ``open_rasterio`` name for the DataArray. Sits immediately
-    # before its deprecated ``name`` alias.
+    # rioxarray ``open_rasterio`` name for the DataArray on ``open_geotiff``;
+    # the internal readers spell the same kwarg ``name``.
     "default_name",
     "name",
     "chunks",
@@ -431,17 +412,13 @@ _CANONICAL_ORDER = (
     "allow_experimental_codecs",
     "allow_internal_only_jpeg",
     "band_nodata",
-    # rioxarray ``open_rasterio`` masking flag (default False). Sits
-    # immediately before its deprecated ``mask_nodata`` alias.
+    # rioxarray ``open_rasterio`` masking flag (default False).
     "masked",
-    "mask_nodata",
-    # rioxarray-compatible read options. ``unpack`` (canonical) and its
-    # deprecated ``mask_and_scale`` alias, plus ``parse_coordinates``, are
-    # threaded into ``read_geotiff_dask``; ``unpack`` also reaches the GPU /
-    # dask+GPU backends (#3071). ``lock`` / ``cache`` are open_geotiff-only
-    # accept-and-warn shims.
+    # rioxarray-compatible read options. ``unpack`` and ``parse_coordinates``
+    # are threaded into ``read_geotiff_dask``; ``unpack`` also reaches the
+    # GPU / dask+GPU backends (#3071). ``lock`` / ``cache`` are
+    # open_geotiff-only accept-and-warn shims.
     "unpack",
-    "mask_and_scale",
     "parse_coordinates",
     "lock",
     "cache",
@@ -485,7 +462,8 @@ def _assert_canonical(fn, allowed_tail=()):
 def test_open_geotiff_defines_canonical_order():
     """``open_geotiff``'s signature is the canonical reference."""
     params = _kwonly_params(open_geotiff)
-    expected = list(_CANONICAL_ORDER)
+    # ``name`` is the internal readers' spelling of ``default_name``.
+    expected = [p for p in _CANONICAL_ORDER if p != "name"]
     assert params == expected, (
         f"open_geotiff kw-only params {params!r} no longer match the "
         f"canonical order {expected!r}. Update both the function and the "
@@ -495,18 +473,9 @@ def test_open_geotiff_defines_canonical_order():
 
 def test_read_geotiff_gpu_matches_canonical_order():
     """``_read_geotiff_gpu`` must list shared params in the canonical order."""
-    # ``gpu`` here is the deprecated alias for ``on_gpu_failure`` (see
-    # ``_read_geotiff_gpu``'s docstring). It is not the boolean backend
-    # selector that lives on ``open_geotiff`` / ``_read_vrt``, so it sits
-    # at the tail rather than in its canonical-order slot.
     params = _kwonly_params(_read_geotiff_gpu)
-    # ``gpu`` is the deprecated alias, intentionally last.
-    assert params[-1] == "gpu", (
-        f"_read_geotiff_gpu must keep the deprecated 'gpu' alias as the last "
-        f"kwarg; got {params!r}"
-    )
-    # Drop the alias and run the canonical-subset check on the rest.
-    head = params[:-1]
+    assert "gpu" not in params, "the 0.x gpu= string alias was removed in 1.0"
+    head = params
     canonical_head = [p for p in _CANONICAL_ORDER if p in head]
     assert head == canonical_head, (
         f"_read_geotiff_gpu kwarg order {head!r} does not match the canonical "
