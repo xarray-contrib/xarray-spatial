@@ -23,7 +23,6 @@ from xrspatial.hydro.snap_pour_point_d8 import snap_pour_point_d8  # noqa
 from xrspatial.hydro.stream_link_d8 import stream_link_d8  # noqa
 from xrspatial.hydro.stream_order_d8 import stream_order_d8  # noqa
 from xrspatial.hydro.twi_d8 import twi_d8  # noqa
-from xrspatial.hydro.watershed_d8 import basins_d8  # noqa
 from xrspatial.hydro.watershed_d8 import watershed_d8  # noqa
 
 # -- concrete D-infinity implementations -----------------------------------
@@ -164,11 +163,6 @@ basin = _RoutingDispatch(
     'basin',
     summary="Label each cell with the outlet of the basin it drains to.",
     d8=basin_d8,
-)
-basins = _RoutingDispatch(
-    'basins',
-    summary="Deprecated alias for :func:`basin`.",
-    d8=basins_d8,
 )
 sink = _RoutingDispatch(
     'sink',

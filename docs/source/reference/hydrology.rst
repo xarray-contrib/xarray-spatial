@@ -102,7 +102,6 @@ Routing variants:
     xrspatial.hydro.watershed_d8.watershed_d8
     xrspatial.hydro.watershed_dinf.watershed_dinf
     xrspatial.hydro.watershed_mfd.watershed_mfd
-    xrspatial.hydro.watershed_d8.basins_d8
 
 Stream Link
 ===========

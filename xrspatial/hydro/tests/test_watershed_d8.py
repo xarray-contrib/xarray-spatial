@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from xrspatial.hydro import watershed, basins
+from xrspatial.hydro import watershed
 from xrspatial.tests.general_checks import (
     create_test_raster,
     cuda_and_cupy_available,
@@ -165,39 +165,15 @@ def test_multiple_paths_to_same_pour_point():
 
 
 # ====================================================================
-# Backward-compat: basins() still works via wrapper
+# The ``basins`` / ``basins_d8`` aliases were removed in 1.0.0
 # ====================================================================
 
-def test_basins_backward_compat():
-    """basins() wrapper delegates to basin() correctly."""
-    from xrspatial.hydro import basin
-
-    flow_dir = np.array([
-        [2.0,  4.0,  8.0],
-        [1.0,  0.0, 16.0],
-        [128.0, 64.0, 32.0],
-    ], dtype=np.float64)
-    fd_da = create_test_raster(flow_dir)
-    old_result = basins(fd_da)
-    new_result = basin(fd_da)
-    np.testing.assert_allclose(old_result.data, new_result.data, equal_nan=True)
-
-
-def test_basins_d8_emits_deprecation_warning():
-    """basins_d8 wrapper warns and still returns the basin result."""
-    from xrspatial.hydro.basin_d8 import basin_d8
-    from xrspatial.hydro.watershed_d8 import basins_d8
-
-    flow_dir = np.array([
-        [2.0,  4.0,  8.0],
-        [1.0,  0.0, 16.0],
-        [128.0, 64.0, 32.0],
-    ], dtype=np.float64)
-    fd_da = create_test_raster(flow_dir)
-    with pytest.warns(DeprecationWarning, match="basins_d8 is deprecated"):
-        old_result = basins_d8(fd_da)
-    new_result = basin_d8(fd_da)
-    np.testing.assert_allclose(old_result.data, new_result.data, equal_nan=True)
+def test_basins_alias_removed():
+    import xrspatial
+    from xrspatial.hydro import watershed_d8
+    assert not hasattr(xrspatial, 'basins')
+    assert not hasattr(xrspatial.hydro, 'basins')
+    assert not hasattr(watershed_d8, 'basins_d8')
 
 
 # ====================================================================

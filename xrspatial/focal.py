@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import math
-import warnings
 from functools import partial
 from math import isnan
 
@@ -150,36 +149,6 @@ def _apply_per_band(band_func, agg, *args, **kwargs):
         band = agg.isel({band_dim: i})
         slices.append(band_func(band, *args, **kwargs))
     return xr.concat(slices, dim=band_dim)
-
-
-def _resolve_raster_alias(agg, raster, func_name):
-    """Support the deprecated ``raster=`` keyword for the first argument.
-
-    The focal public functions standardised their first parameter on
-    ``agg`` to match the rest of the library.  ``apply`` and ``hotspots``
-    historically named it ``raster``; this shim keeps that keyword working
-    while emitting a ``DeprecationWarning``.
-    """
-    if raster is not None:
-        if agg is not None:
-            raise TypeError(
-                f"{func_name}() got both 'agg' and the deprecated 'raster' "
-                f"argument; pass the input as 'agg' only."
-            )
-        warnings.warn(
-            f"{func_name}(): the 'raster' argument is deprecated and will be "
-            f"removed in a future release; use 'agg' instead.",
-            DeprecationWarning,
-            # stacklevel=3 points the warning at the caller:
-            # caller -> public func (apply/hotspots) -> this helper.
-            stacklevel=3,
-        )
-        return raster
-    if agg is None:
-        raise TypeError(
-            f"{func_name}() missing required argument: 'agg'"
-        )
-    return agg
 
 
 # TODO: Make convolution more generic with numba first-class functions.
@@ -626,8 +595,8 @@ def _apply_dask_cupy(data, kernel, func, boundary='nan'):
     return out
 
 
-def apply(agg=None, kernel=None, func=None, name='focal_apply',
-          boundary='nan', *, raster=None):
+def apply(agg, kernel=None, func=None, name='focal_apply',
+          boundary='nan'):
     """
     Returns custom function applied array using a user-created window.
 
@@ -665,9 +634,6 @@ def apply(agg=None, kernel=None, func=None, name='focal_apply',
     -------
     agg : xarray.DataArray of same type as `agg`
         2D aggregate array of filtered values.
-
-    .. deprecated::
-        The ``raster`` keyword argument is deprecated; use ``agg``.
 
     Examples
     --------
@@ -753,8 +719,6 @@ def apply(agg=None, kernel=None, func=None, name='focal_apply',
            [2. , 2. , 2. , 1.5]])
     Dimensions without coordinates: y, x
     """
-    agg = _resolve_raster_alias(agg, raster, 'apply')
-
     _validate_raster(agg, func_name='apply', name='agg', ndim=(2, 3))
 
     if func is None:
@@ -1735,8 +1699,7 @@ def _hotspots_cupy(raster, kernel, boundary='nan'):
     return out
 
 
-def hotspots(agg=None, kernel=None, name='hotspots', boundary='nan', *,
-             raster=None):
+def hotspots(agg, kernel=None, name='hotspots', boundary='nan'):
     """
     Identify statistically significant hot spots and cold spots in an
     input raster using the Getis-Ord Gi* statistic. To be a
@@ -1791,9 +1754,6 @@ def hotspots(agg=None, kernel=None, name='hotspots', boundary='nan', *,
     hotspots_agg : xarray.DataArray of same type as `agg`
         2D array of hotspots with values indicating confidence level.
 
-    .. deprecated::
-        The ``raster`` keyword argument is deprecated; use ``agg``.
-
     Examples
     --------
     .. sourcecode:: python
@@ -1815,8 +1775,6 @@ def hotspots(agg=None, kernel=None, name='hotspots', boundary='nan', *,
                [  0,   0,   0,   0,   0,   0]], dtype=int8)
         Dimensions without coordinates: dim_0, dim_1
     """
-
-    agg = _resolve_raster_alias(agg, raster, 'hotspots')
 
     _validate_raster(agg, func_name='hotspots', name='agg', ndim=(2, 3))
 

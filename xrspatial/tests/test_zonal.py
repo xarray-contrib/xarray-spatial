@@ -2248,53 +2248,9 @@ def test_crop_nothing_to_crop():
 
 
 # ---------------------------------------------------------------------------
-# Regression tests for #2521: crop() should accept the canonical zone_ids
-# kwarg (matching stats() and crosstab()), with zones_ids kept as a
-# deprecated alias.
+# Regression tests for #2521: crop() takes the canonical zone_ids kwarg
+# (matching stats() and crosstab()). The zones_ids alias was removed in 1.0.0.
 # ---------------------------------------------------------------------------
-
-def test_crop_zone_ids_canonical_matches_zones_ids_legacy():
-    """crop(..., zone_ids=...) produces the same result as the legacy alias."""
-    import warnings
-
-    arr = np.array([[0, 4, 0, 3],
-                    [0, 4, 4, 3],
-                    [0, 1, 1, 3],
-                    [0, 1, 1, 3],
-                    [0, 0, 0, 0]], dtype=np.int64)
-    raster = create_test_arr(arr)
-
-    new = crop(raster, raster, zone_ids=(1, 3))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        legacy = crop(raster, raster, zones_ids=(1, 3))
-
-    assert new.shape == legacy.shape
-    assert (new.data == legacy.data).all()
-
-
-def test_crop_zones_ids_emits_deprecation_warning():
-    """Passing zones_ids must emit a DeprecationWarning."""
-    import warnings
-
-    arr = np.array([[0, 4, 0, 3],
-                    [0, 4, 4, 3],
-                    [0, 1, 1, 3],
-                    [0, 1, 1, 3],
-                    [0, 0, 0, 0]], dtype=np.int64)
-    raster = create_test_arr(arr)
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        crop(raster, raster, zones_ids=(1, 3))
-
-    dep = [w for w in caught if issubclass(w.category, DeprecationWarning)
-           and "zones_ids" in str(w.message)]
-    assert len(dep) >= 1, (
-        f"Expected a DeprecationWarning mentioning zones_ids, got: "
-        f"{[str(w.message) for w in caught]}"
-    )
-
 
 def test_crop_zone_ids_does_not_warn():
     """Passing zone_ids (canonical) must not emit a DeprecationWarning."""
@@ -2311,16 +2267,15 @@ def test_crop_zone_ids_does_not_warn():
         warnings.simplefilter("always")
         crop(raster, raster, zone_ids=(1, 3))
 
-    dep = [w for w in caught if issubclass(w.category, DeprecationWarning)
-           and "zones_ids" in str(w.message)]
+    dep = [w for w in caught if issubclass(w.category, DeprecationWarning)]
     assert dep == [], (
         f"Expected no DeprecationWarning for zone_ids, got: "
         f"{[str(w.message) for w in dep]}"
     )
 
 
-def test_crop_both_aliases_raises():
-    """Passing both zone_ids and zones_ids must raise TypeError."""
+def test_crop_zones_ids_removed():
+    """The 0.x zones_ids alias is gone in 1.0.0 (#3762)."""
     arr = np.array([[0, 4, 0, 3],
                     [0, 4, 4, 3],
                     [0, 1, 1, 3],
@@ -2328,12 +2283,12 @@ def test_crop_both_aliases_raises():
                     [0, 0, 0, 0]], dtype=np.int64)
     raster = create_test_arr(arr)
 
-    with pytest.raises(TypeError, match="zone_ids.*zones_ids|zones_ids.*zone_ids"):
-        crop(raster, raster, zone_ids=(1,), zones_ids=(3,))
+    with pytest.raises(TypeError, match="zones_ids"):
+        crop(raster, raster, zones_ids=(1, 3))
 
 
 def test_crop_missing_zone_ids_raises():
-    """crop() with neither zone_ids nor zones_ids must raise TypeError."""
+    """crop() without zone_ids must raise TypeError."""
     arr = np.array([[0, 4, 0, 3],
                     [0, 4, 4, 3]], dtype=np.int64)
     raster = create_test_arr(arr)

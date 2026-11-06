@@ -121,7 +121,6 @@ from xrspatial.visibility import cumulative_viewshed  # noqa
 from xrspatial.visibility import line_of_sight  # noqa
 from xrspatial.visibility import visibility_frequency  # noqa
 from xrspatial.hydro import basin  # noqa: unified wrapper
-from xrspatial.hydro import basins  # noqa: backward-compat alias
 from xrspatial.hydro import watershed  # noqa: unified wrapper
 from xrspatial.zonal import apply as zonal_apply  # noqa
 from xrspatial.zonal import crop  # noqa
