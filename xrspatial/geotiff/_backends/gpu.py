@@ -297,11 +297,10 @@ def _read_geotiff_gpu(source: str, *,
 
     if on_gpu_failure is _ON_GPU_FAILURE_SENTINEL:
         on_gpu_failure = 'auto'
-    # The failure policy is read below through the ``gpu`` local.
-    gpu = on_gpu_failure
-    if gpu not in ('auto', 'strict'):
+    if on_gpu_failure not in ('auto', 'strict'):
         raise ValueError(
-            f"on_gpu_failure must be 'auto' or 'strict', got {gpu!r}")
+            "on_gpu_failure must be 'auto' or 'strict', "
+            f"got {on_gpu_failure!r}")
     # Reject non-positive chunk sizes up front so the GPU dask+cupy path
     # surfaces the same error as ``_read_geotiff_dask``. Previously
     # ``chunks=0`` raised ``ZeroDivisionError`` deep in cupy/dask, and
@@ -770,7 +769,7 @@ def _read_geotiff_gpu(source: str, *,
                     tw, th, width, height,
                     compression, predictor, file_dtype,
                     byte_order=ifd_header.byte_order,
-                    gpu=gpu,
+                    gpu=on_gpu_failure,
                 )
                 if band_arr is None:
                     # Auto-mode signal: stage-2 GPU decode failed for this
@@ -843,7 +842,7 @@ def _read_geotiff_gpu(source: str, *,
                         masked_fill=masked_fill,
                     )
                 except Exception as e:
-                    if gpu == 'strict' or _geotiff_strict_mode():
+                    if on_gpu_failure == 'strict' or _geotiff_strict_mode():
                         raise
                     warnings.warn(
                         f"_read_geotiff_gpu: GPU decode failed "
@@ -882,7 +881,7 @@ def _read_geotiff_gpu(source: str, *,
                     masked_fill=masked_fill,
                 )
             except Exception as e:
-                if gpu == 'strict' or _geotiff_strict_mode():
+                if on_gpu_failure == 'strict' or _geotiff_strict_mode():
                     raise
                 warnings.warn(
                     f"_read_geotiff_gpu: GPU decode failed "

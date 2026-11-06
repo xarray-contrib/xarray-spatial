@@ -940,7 +940,7 @@ def test_write_vrt_vrt_path_kwarg_removed(tmp_path):
     """The old ``vrt_path=`` spelling is gone in 1.0; use ``path=``."""
     src = _build_source_tif(tmp_path)
     out = str(tmp_path / 'out.vrt')
-    with pytest.raises(TypeError, match='vrt_path'):
+    with pytest.raises(TypeError, match="unexpected keyword argument 'vrt_path'"):
         _build_vrt(vrt_path=out, source_files=[src])
 
 
@@ -1102,7 +1102,7 @@ def test_write_vrt_crs_wkt_removed(tmp_path):
 
     wkt = CRS.from_epsg(4326).to_wkt()
 
-    with pytest.raises(TypeError, match='crs_wkt'):
+    with pytest.raises(TypeError, match="unexpected keyword argument 'crs_wkt'"):
         _build_vrt(vrt_path, [src], crs_wkt=wkt)
     out = _build_vrt(vrt_path, [src], crs=wkt)
     assert out == vrt_path

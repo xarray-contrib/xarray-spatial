@@ -141,7 +141,7 @@ def test_masked_true_promotes_and_masks(tmp_path):
 def test_mask_nodata_removed(tmp_path):
     """The 0.x ``mask_nodata=`` alias is gone in 1.0; use ``masked=``."""
     path = _int_sentinel_tiff(str(tmp_path / "t2961_alias.tif"))
-    with pytest.raises(TypeError, match="mask_nodata"):
+    with pytest.raises(TypeError, match="unexpected keyword argument 'mask_nodata'"):
         open_geotiff(path, mask_nodata=True)
 
 
@@ -164,7 +164,7 @@ def test_default_name_sets_array_name(tmp_path):
 
 def test_name_removed(tmp_path):
     path = _int_sentinel_tiff(str(tmp_path / "t2961_name_alias.tif"))
-    with pytest.raises(TypeError, match="name"):
+    with pytest.raises(TypeError, match="unexpected keyword argument 'name'"):
         open_geotiff(path, name="elevation")
 
 
@@ -175,7 +175,7 @@ def test_name_removed(tmp_path):
 def test_mask_and_scale_removed(tmp_path):
     """The 0.x ``mask_and_scale=`` alias is gone in 1.0; use ``unpack=``."""
     path = _scale_offset_tiff(str(tmp_path / "t3071_ms_alias.tif"))
-    with pytest.raises(TypeError, match="mask_and_scale"):
+    with pytest.raises(TypeError, match="unexpected keyword argument 'mask_and_scale'"):
         open_geotiff(path, mask_and_scale=True)
 
 

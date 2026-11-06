@@ -128,6 +128,8 @@ def _build_vrt(path: str,
         raise TypeError(
             "_build_vrt: 'path' must be a str, got None")
     if source_files is None:
+        # Only reachable via an explicit ``source_files=None``; omitting
+        # the argument is caught by CPython before we get here.
         raise TypeError(
             "_build_vrt: missing required argument 'source_files'")
 

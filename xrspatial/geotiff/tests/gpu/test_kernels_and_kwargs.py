@@ -216,7 +216,7 @@ def test_gpu_string_kwarg_removed_1560():
     """The 0.x ``gpu='auto' / 'strict'`` spelling is gone in 1.0."""
     from xrspatial.geotiff import _read_geotiff_gpu
 
-    with pytest.raises(TypeError, match="gpu"):
+    with pytest.raises(TypeError, match="unexpected keyword argument 'gpu'"):
         _read_geotiff_gpu("/nonexistent.tif", gpu='strict')
 
 
