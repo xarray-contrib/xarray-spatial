@@ -5,6 +5,8 @@ row, fails here so the two cannot drift apart.
 import re
 from pathlib import Path
 
+import pytest
+
 import xrspatial
 import xrspatial.mcda
 
@@ -43,6 +45,8 @@ def _matrix_rows():
 
 
 def test_readme_matrix_matches_public_surface():
+    if not README.exists():
+        pytest.skip("README.md is only present in a repository checkout")
     top_rows, mcda_rows = {}, {}
     for section, name, path in _matrix_rows():
         if path.startswith("xrspatial/experimental/"):

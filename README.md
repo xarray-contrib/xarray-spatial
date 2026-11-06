@@ -267,7 +267,7 @@ Built-in Numba JIT and CUDA projection kernels bypass pyproj for per-pixel coord
 | [fused_overlap](xrspatial/utils.py) | Fuse sequential map_overlap calls into a single pass | Custom | 🔼 | 🔼 | 🔼 | 🔼 |
 | [multi_overlap](xrspatial/utils.py) | Run multi-output kernel in a single overlap pass | Custom | 🔼 | 🔼 | 🔼 | 🔼 |
 | [validate](xrspatial/validate.py) | Check a raster against the xarray-spatial input contract (`.xrs.validate()`) | Custom | 🔼 | 🔼 | 🔼 | 🔼 |
-| [diagnose](xrspatial/diagnostics.py) | Report which xarray-spatial tools a raster is ready for and what blocks the rest | Custom | 🔼 |  |  |  |
+| [diagnose](xrspatial/diagnostics.py) | Heuristic checks for common pitfalls before running a tool; `tool=` narrows the checks to one function | Custom | 🔼 |  |  |  |
 
 -----------
 
@@ -418,7 +418,7 @@ For a broader catalog of spectral indices and sensor-specific band combinations,
 | [Proximity](xrspatial/proximity.py) | Computes the distance from each cell to the nearest source feature | Standard | ✅ | 🔼 | 🔼 | 🔼 |
 | [Euclidean Distance](xrspatial/proximity.py) `euclidean_distance` | Straight-line distance between two points; the scalar metric behind `proximity` (backend-independent) | Standard | 🔼 |  |  |  |
 | [Manhattan Distance](xrspatial/proximity.py) `manhattan_distance` | City-block distance between two points (backend-independent) | Standard | 🔼 |  |  |  |
-| [Great-Circle Distance](xrspatial/proximity.py) `great_circle_distance` | Haversine distance between two lon/lat points in meters (backend-independent) | Haversine | 🔼 |  |  |  |
+| [Great-Circle Distance](xrspatial/proximity.py) `great_circle_distance` | Haversine distance between two lon/lat points, in the unit of `radius` (meters by default) (backend-independent) | Haversine | 🔼 |  |  |  |
 | [Surface Distance](xrspatial/surface_distance.py) | Computes distance along the 3D terrain surface to the nearest source | Standard (Dijkstra) | 🔼 | 🔼 | 🔼 | 🔼 |
 | [Surface Allocation](xrspatial/surface_distance.py) | Assigns each cell to the nearest source by terrain surface distance | Standard (Dijkstra) | 🔼 | 🔼 | 🔼 | 🔼 |
 | [Surface Direction](xrspatial/surface_distance.py) | Computes compass direction to the nearest source by terrain surface distance | Standard (Dijkstra) | 🔼 | 🔼 | 🔼 | 🔼 |
@@ -436,8 +436,8 @@ For a broader catalog of spectral indices and sensor-specific band combinations,
 | [Trim](xrspatial/zonal.py) | Removes nodata border rows and columns from a raster | Standard | ✅ | 🔼 | 🔼 | 🔼 |
 | [Zonal Statistics](xrspatial/zonal.py) `zonal_stats` | Computes summary statistics for a value raster within each zone | Standard | ✅ | 🔼 | 🔼 | 🔼 |
 | [Zonal Cross Tabulate](xrspatial/zonal.py) `zonal_crosstab` | Cross-tabulates agreement between two categorical rasters | Standard | 🔼 | 🔼 | 🔼 | 🔼 |
-| [Hypsometric Integral](xrspatial/zonal.py) `hypsometric_integral` | Elevation-relief ratio of each zone (Strahler hypsometric integral) | Strahler 1952 | 🔼 | 🔼 | 🔼 | 🔼 |
-| [Suggest Zonal Canvas](xrspatial/zonal.py) `suggest_zonal_canvas` | Pick a raster extent and cell size for rasterizing zone polygons (backend-independent) | Custom | 🔼 |  |  |  |
+| [Hypsometric Integral](xrspatial/zonal.py) `hypsometric_integral` | Hypsometric integral `(mean - min) / (max - min)` of the elevations in each zone, painted back to a raster | Standard | 🔼 | 🔼 | 🔼 | 🔼 |
+| [Suggest Zonal Canvas](xrspatial/zonal.py) `suggest_zonal_canvas` | Canvas `(height, width)` in pixels so the smallest zone polygon covers at least `min_pixels` cells (backend-independent) | Custom | 🔼 |  |  |  |
 
 -----------
 
