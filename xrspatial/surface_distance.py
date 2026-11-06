@@ -86,6 +86,12 @@ _MODE_TASK_NAMES = {
 #   output (float32)            4
 #   direction-mode temps        ~16
 # Total ~80 bytes/pixel.  A 50000x50000 raster needs ~200 GB.
+#
+# The heap terms above are the starting capacity of one entry per pixel.
+# Dense-target rasters push more than that and _heap_grow doubles the
+# three arrays, so the real figure can exceed 80 (48 bytes/pixel of heap
+# after one doubling, and ~72 transiently while the copy is in flight).
+# This estimate is a floor, not a bound.
 _BYTES_PER_PIXEL = 80
 
 # CuPy backend skips the explicit binary heap (parallel relaxation instead)
@@ -168,6 +174,19 @@ def _check_gpu_memory(rows, cols):
 
 
 @ngjit
+def _heap_grow(keys, rows, cols, size):
+    """Return copies of the heap arrays with twice the capacity."""
+    cap = 2 * len(keys)
+    new_keys = np.empty(cap, dtype=np.float64)
+    new_rows = np.empty(cap, dtype=np.int64)
+    new_cols = np.empty(cap, dtype=np.int64)
+    new_keys[:size] = keys[:size]
+    new_rows[:size] = rows[:size]
+    new_cols[:size] = cols[:size]
+    return new_keys, new_rows, new_cols
+
+
+@ngjit
 def _seed_sources(source_data, elev_data, target_values,
                   dist, alloc, src_row, src_col):
     """Seed source pixels into pre-allocated output arrays.
@@ -208,7 +227,13 @@ def _dijkstra(elev_data, height, width, max_distance,
     """
     n_neighbors = len(dy)
 
-    max_heap = height * width
+    # This is a lazy-deletion min-heap: a pixel is pushed again every time
+    # its tentative distance improves, and stale entries linger until a pop
+    # skips them.  Live occupancy therefore tracks the number of improving
+    # relaxations, not the pixel count, so the old fixed height*width heap
+    # let _heap_push write past the end of these arrays (#3723).  Start at
+    # one entry per pixel and double whenever a push would overflow.
+    max_heap = max(height * width, 1)
     h_keys = np.empty(max_heap, dtype=np.float64)
     h_rows = np.empty(max_heap, dtype=np.int64)
     h_cols = np.empty(max_heap, dtype=np.int64)
@@ -220,6 +245,9 @@ def _dijkstra(elev_data, height, width, max_distance,
     for r in range(height):
         for c in range(width):
             if dist[r, c] < np.inf:
+                if h_size == len(h_keys):
+                    h_keys, h_rows, h_cols = _heap_grow(
+                        h_keys, h_rows, h_cols, h_size)
                 h_size = _heap_push(h_keys, h_rows, h_cols, h_size,
                                     dist[r, c], r, c)
 
@@ -257,6 +285,9 @@ def _dijkstra(elev_data, height, width, max_distance,
                 alloc[vr, vc] = alloc[ur, uc]
                 src_row[vr, vc] = src_row[ur, uc]
                 src_col[vr, vc] = src_col[ur, uc]
+                if h_size == len(h_keys):
+                    h_keys, h_rows, h_cols = _heap_grow(
+                        h_keys, h_rows, h_cols, h_size)
                 h_size = _heap_push(h_keys, h_rows, h_cols, h_size,
                                     new_cost, vr, vc)
 
@@ -271,7 +302,8 @@ def _dijkstra_geodesic(elev_data, height, width, max_distance,
     """
     n_neighbors = len(dy)
 
-    max_heap = height * width
+    # See _dijkstra for the heap-capacity rationale.
+    max_heap = max(height * width, 1)
     h_keys = np.empty(max_heap, dtype=np.float64)
     h_rows = np.empty(max_heap, dtype=np.int64)
     h_cols = np.empty(max_heap, dtype=np.int64)
@@ -282,6 +314,9 @@ def _dijkstra_geodesic(elev_data, height, width, max_distance,
     for r in range(height):
         for c in range(width):
             if dist[r, c] < np.inf:
+                if h_size == len(h_keys):
+                    h_keys, h_rows, h_cols = _heap_grow(
+                        h_keys, h_rows, h_cols, h_size)
                 h_size = _heap_push(h_keys, h_rows, h_cols, h_size,
                                     dist[r, c], r, c)
 
@@ -319,6 +354,9 @@ def _dijkstra_geodesic(elev_data, height, width, max_distance,
                 alloc[vr, vc] = alloc[ur, uc]
                 src_row[vr, vc] = src_row[ur, uc]
                 src_col[vr, vc] = src_col[ur, uc]
+                if h_size == len(h_keys):
+                    h_keys, h_rows, h_cols = _heap_grow(
+                        h_keys, h_rows, h_cols, h_size)
                 h_size = _heap_push(h_keys, h_rows, h_cols, h_size,
                                     new_cost, vr, vc)
 
@@ -1537,6 +1575,13 @@ def surface_distance(
     Edge cost accounts for both horizontal distance and elevation
     change: ``sqrt(horizontal_dist^2 + dz^2)``.
 
+    Surface distance supports NumPy, CuPy, Dask with NumPy, and Dask with
+    CuPy backed xarray DataArray.  The return value is of the same type as
+    the input: a NumPy-backed input gives a NumPy-backed result, a
+    CuPy-backed input gives a CuPy-backed result, and a Dask-backed input
+    gives a Dask-backed result.  ``method='geodesic'`` is the exception --
+    it is implemented for NumPy-backed input only.
+
     Parameters
     ----------
     raster : xr.DataArray or xr.Dataset
@@ -1560,13 +1605,53 @@ def surface_distance(
     method : str, default='planar'
         ``'planar'`` uses cell sizes in map units.
         ``'geodesic'`` computes great-circle horizontal distances
-        from lat/lon coordinates (elevation in meters).
+        from lat/lon coordinates (elevation in meters).  Geodesic mode
+        requires a NumPy-backed DataArray; CuPy, Dask with NumPy, and
+        Dask with CuPy input raises ``NotImplementedError``.
 
     Returns
     -------
     xr.DataArray or xr.Dataset
         2-D array of surface distance values (float32).
         Source pixels have distance 0.  Unreachable pixels are NaN.
+
+    Examples
+    --------
+    A single source in the top-left corner and a peak in the middle of an
+    otherwise flat 3x3 grid:
+
+    .. sourcecode:: python
+
+        >>> import numpy as np
+        >>> import xarray as xr
+        >>> from xrspatial import surface_distance
+        >>> source = np.array([
+        ...     [1., 0., 0.],
+        ...     [0., 0., 0.],
+        ...     [0., 0., 0.],
+        ... ])
+        >>> elevation = np.array([
+        ...     [0., 0., 0.],
+        ...     [0., 3., 0.],
+        ...     [0., 0., 0.],
+        ... ])
+        >>> n, m = source.shape
+        >>> raster = xr.DataArray(source, dims=['y', 'x'], name='raster')
+        >>> raster['y'] = np.arange(n)[::-1]
+        >>> raster['x'] = np.arange(m)
+        >>> elev = xr.DataArray(
+        ...     elevation, dims=['y', 'x'], name='elevation')
+        >>> elev['y'] = np.arange(n)[::-1]
+        >>> elev['x'] = np.arange(m)
+
+        >>> surface_distance(raster, elev).values
+        array([[0.       , 1.       , 2.       ],
+               [1.       , 3.3166249, 2.4142137],
+               [2.       , 2.4142137, 3.4142137]], dtype=float32)
+
+    Climbing to the summit costs ``sqrt(2 + 9) = 3.32``, while the far
+    corner is reached for 3.41 by walking around the peak along the flat
+    edges rather than over it.
     """
     result_data = _compute(
         raster, elevation, x, y, target_values, max_distance,
@@ -1591,6 +1676,11 @@ def surface_allocation(
     For each pixel, returns the value of the nearest target pixel by
     surface distance through the elevation model.
 
+    Surface allocation supports NumPy, CuPy, Dask with NumPy, and Dask
+    with CuPy backed xarray DataArray, and returns the same type it was
+    given.  ``method='geodesic'`` is implemented for NumPy-backed input
+    only.
+
     Parameters
     ----------
     raster : xr.DataArray or xr.Dataset
@@ -1603,7 +1693,50 @@ def surface_allocation(
     Returns
     -------
     xr.DataArray or xr.Dataset
-        2-D array of allocation values (float32).
+        2-D array of allocation values (float32).  Pixels that cannot
+        reach any target are NaN.
+
+    Notes
+    -----
+    When two or more targets are exactly equidistant from a pixel, which
+    one is reported is unspecified and varies by backend: the numpy and
+    dask paths break the tie on Dijkstra's pop order, the cupy path on
+    the order its relaxation passes converge.  The distances themselves
+    agree; only the reported source differs.  Do not depend on the
+    tie-break.
+
+    Examples
+    --------
+    Two sources on opposite corners, separated by a peak in the middle:
+
+    .. sourcecode:: python
+
+        >>> import numpy as np
+        >>> import xarray as xr
+        >>> from xrspatial import surface_allocation
+        >>> source = np.array([
+        ...     [1., 0., 0.],
+        ...     [0., 0., 0.],
+        ...     [0., 2., 0.],
+        ... ])
+        >>> elevation = np.array([
+        ...     [0., 0., 0.],
+        ...     [0., 3., 0.],
+        ...     [0., 0., 0.],
+        ... ])
+        >>> n, m = source.shape
+        >>> raster = xr.DataArray(source, dims=['y', 'x'], name='raster')
+        >>> raster['y'] = np.arange(n)[::-1]
+        >>> raster['x'] = np.arange(m)
+        >>> elev = xr.DataArray(
+        ...     elevation, dims=['y', 'x'], name='elevation')
+        >>> elev['y'] = np.arange(n)[::-1]
+        >>> elev['x'] = np.arange(m)
+
+        >>> surface_allocation(raster, elev).values
+        array([[1., 1., 1.],
+               [1., 2., 2.],
+               [2., 2., 2.]], dtype=float32)
     """
     result_data = _compute(
         raster, elevation, x, y, target_values, max_distance,
@@ -1629,6 +1762,11 @@ def surface_direction(
     nearest target pixel by surface distance.  0 = source pixel,
     90 = east, 180 = south, 270 = west, 360 = north.
 
+    Surface direction supports NumPy, CuPy, Dask with NumPy, and Dask
+    with CuPy backed xarray DataArray, and returns the same type it was
+    given.  ``method='geodesic'`` is implemented for NumPy-backed input
+    only.
+
     Parameters
     ----------
     raster : xr.DataArray or xr.Dataset
@@ -1641,7 +1779,48 @@ def surface_direction(
     Returns
     -------
     xr.DataArray or xr.Dataset
-        2-D array of direction values (float32, degrees).
+        2-D array of direction values (float32, degrees).  Pixels that
+        cannot reach any target are NaN.
+
+    Notes
+    -----
+    When two or more targets are exactly equidistant from a pixel, which
+    one the bearing points at is unspecified and varies by backend.  See
+    :func:`surface_allocation`.
+
+    Examples
+    --------
+    A single source at the centre of a flat 3x3 grid.  Each pixel reports
+    the compass bearing back toward that source:
+
+    .. sourcecode:: python
+
+        >>> import numpy as np
+        >>> import xarray as xr
+        >>> from xrspatial import surface_direction
+        >>> source = np.array([
+        ...     [0., 0., 0.],
+        ...     [0., 1., 0.],
+        ...     [0., 0., 0.],
+        ... ])
+        >>> elevation = np.zeros((3, 3))
+        >>> n, m = source.shape
+        >>> raster = xr.DataArray(source, dims=['y', 'x'], name='raster')
+        >>> raster['y'] = np.arange(n)[::-1]
+        >>> raster['x'] = np.arange(m)
+        >>> elev = xr.DataArray(
+        ...     elevation, dims=['y', 'x'], name='elevation')
+        >>> elev['y'] = np.arange(n)[::-1]
+        >>> elev['x'] = np.arange(m)
+
+        >>> surface_direction(raster, elev).values
+        array([[ 45., 360., 315.],
+               [ 90.,   0., 270.],
+               [135., 180., 225.]], dtype=float32)
+
+    The raster is north-up (``y`` descends with the row index), so the
+    row above the source reads 360 and the row below reads 180, the same
+    convention :func:`xrspatial.direction` uses.  The source itself reads 0.
     """
     result_data = _compute(
         raster, elevation, x, y, target_values, max_distance,
