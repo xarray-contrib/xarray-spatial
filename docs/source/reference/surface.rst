@@ -109,6 +109,13 @@ Perlin Noise
 
     xrspatial.perlin.perlin
 
+Worley Noise
+============
+.. autosummary::
+    :toctree: _autosummary
+
+    xrspatial.worley.worley
+
 Bump Mapping
 ============
 .. autosummary::

@@ -8,7 +8,7 @@ plainly what it found.
 """
 import pytest
 
-from xrspatial import _check_numpy_version
+from xrspatial._numpy_floor import _check_numpy_version
 
 
 @pytest.mark.parametrize("version", ["1.26.0", "1.26.4", "1.26.0.dev0+abc", "1.99.9"])
