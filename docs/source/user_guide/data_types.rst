@@ -149,10 +149,15 @@ Focal statistics and convolution operations also use float32:
    # Integer input data
    data = xr.DataArray(np.random.randint(0, 255, (100, 100), dtype=np.uint8))
 
-   # Focal operations convert to and output float32
+   # Focal operations convert 8/16-bit integers to float32
    kernel = circle_kernel(1, 1, 3)
    smoothed = convolve_2d(data, kernel)
    print(f"Convolution output dtype: {smoothed.dtype}")  # float32
+
+   # 32/64-bit integers are widened to float64 instead, because float32
+   # cannot represent integers above 2**24 exactly
+   wide = xr.DataArray(np.arange(10_000, dtype=np.int32).reshape(100, 100))
+   print(f"Convolution output dtype: {convolve_2d(wide, kernel).dtype}")  # float64
 
 
 Backend Consistency

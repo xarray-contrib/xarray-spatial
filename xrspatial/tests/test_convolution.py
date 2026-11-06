@@ -10,7 +10,8 @@ from xrspatial.convolution import (annulus_kernel, calc_cellsize, circle_kernel,
 from xrspatial.tests.general_checks import (assert_boundary_mode_correctness,
                                             assert_numpy_equals_cupy, assert_numpy_equals_dask_cupy,
                                             assert_numpy_equals_dask_numpy, create_test_raster,
-                                            cuda_and_cupy_available, dask_array_available)
+                                            cuda_and_cupy_available, dask_array_available,
+                                            has_cuda_and_cupy)
 from xrspatial.utils import VALID_BOUNDARY_MODES
 
 KERNEL = circle_kernel(1, 1, 1)
@@ -28,6 +29,49 @@ def test_convolve_2d_dask_dtype_matches_numpy(dtype):
     lazy = convolve_2d(da.from_array(data, chunks=(4, 4)), KERNEL)
     assert lazy.dtype == eager.dtype
     assert lazy.compute().dtype == eager.dtype
+
+
+@pytest.mark.parametrize("dtype, expected", [
+    (np.uint8, np.float32),
+    (np.int16, np.float32),
+    (np.int32, np.float64),
+    (np.uint32, np.float64),
+    (np.int64, np.float64),
+    (np.float32, np.float32),
+    (np.float64, np.float64),
+])
+def test_convolve_2d_promotion_rule_3684(dtype, expected):
+    # Floats keep their dtype; narrow ints go to float32, which holds them
+    # exactly; 32/64-bit ints go to float64 because float32 cannot separate
+    # integers above 2**24 (#3684).
+    data = np.arange(64).reshape(8, 8).astype(dtype)
+    assert convolve_2d(data, KERNEL).dtype == expected
+
+
+@pytest.mark.parametrize("dtype", [np.int32, np.int64])
+def test_convolution_2d_wide_int_exact_above_2_24_3684(dtype):
+    # Regression for #3684: a horizontal-gradient kernel on an int32 raster
+    # offset by 1e8 returned 0 because the float32 cast erased the unit
+    # steps. Every backend must match the float64 reference exactly.
+    base = 100_000_000
+    data = (np.arange(30).reshape(5, 6) % 6 + base).astype(dtype)
+    kernel = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=np.float64)
+    expected = convolution_2d(create_test_raster(data.astype(np.float64)), kernel)
+    assert expected.data[2, 2] == 8.0
+
+    backends = ['numpy', 'dask+numpy']
+    if has_cuda_and_cupy():
+        backends += ['cupy', 'dask+cupy']
+    for backend in backends:
+        agg = create_test_raster(data, backend=backend, chunks=(2, 3))
+        out = convolution_2d(agg, kernel).data
+        if hasattr(out, 'compute'):
+            out = out.compute()
+        if hasattr(out, 'get'):
+            out = out.get()
+        assert out.dtype == np.float64, backend
+        # exact, not allclose: at 1e8 a relative tolerance would hide the bug
+        np.testing.assert_array_equal(out, expected.data, err_msg=backend)
 
 
 @cuda_and_cupy_available
