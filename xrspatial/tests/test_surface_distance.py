@@ -1165,6 +1165,591 @@ def test_geodesic_rejects_dask():
     raster = _make_raster(source, backend='dask+numpy', chunks=(2, 2))
     elevation = _make_raster(elev, backend='dask+numpy', chunks=(2, 2))
 
+
+# ---------------------------------------------------------------------------
+# Reference parity — golden values from scipy.sparse.csgraph.dijkstra
+# ---------------------------------------------------------------------------
+#
+# The expected arrays below were produced by an independent reference:
+# scipy 1.16.1 ``scipy.sparse.csgraph.dijkstra`` run over an explicitly
+# built grid graph whose edge weights are ``sqrt(horizontal**2 + dz**2)``,
+# the cost model surface_distance documents.  xrspatial reproduced them
+# bit for bit (max abs difference 0.0) across the numpy, dask+numpy, cupy
+# and dask+cupy backends.  These tests pin that parity so it cannot break
+# silently; regenerate them only against the reference, never against
+# xrspatial's own output.
+
+_REF_ELEV = np.array([
+    [0.,  10.,  25.,  40.,  55.,  40.,  25.,  10.],
+    [0.,  12.,  30.,  60.,  75.,  60.,  30.,  12.],
+    [0.,  15.,  40.,  90., 120.,  90.,  40.,  15.],
+    [0.,  15.,  40.,  np.nan, np.nan,  90.,  40.,  15.],
+    [0.,  12.,  30.,  np.nan, np.nan,  60.,  30.,  12.],
+    [0.,  10.,  25.,  40.,  55.,  40.,  25.,  10.],
+    [0.,   8.,  18.,  28.,  36.,  28.,  18.,   8.],
+    [0.,   5.,  10.,  15.,  20.,  15.,  10.,   5.],
+])
+
+_REF_SOURCE = np.zeros((8, 8), dtype=np.float64)
+_REF_SOURCE[0, 0] = 1.0
+_REF_SOURCE[7, 7] = 2.0
+
+_REF_CELLSIZE = 30.0
+
+_REF_DISTANCE_8 = np.array([
+    [0.0000, 31.6228, 65.1638, 98.7048, 132.2458, 165.7868, 199.3279, 210.6487],  # noqa: E501
+    [30.0000, 44.0908, 78.5269, 120.1638, 153.7048, 174.9659, 195.4324, 180.5821],  # noqa: E501
+    [60.0000, 74.2404, 94.9239, 152.0116, 193.6485, 198.7048, 167.2159, 150.4324],  # noqa: E501
+    [90.0000, 104.2404, 123.4847, np.nan, np.nan, 170.6465, 137.2159, 120.4324],
+    [120.0000, 134.0908, 149.2404, np.nan, np.nan, 128.2201, 105.5931, 90.2828],
+    [150.0000, 163.5890, 176.9478, 149.6591, 125.7057, 92.1646, 75.1793, 60.2162],  # noqa: E501
+    [180.0000, 193.1741, 164.1876, 134.4155, 107.0445, 75.9962, 44.3734, 30.1496],  # noqa: E501
+    [210.0000, 182.4829, 152.0691, 121.6553, 91.2414, 60.8276, 30.4138, 0.0000],
+])
+
+_REF_DISTANCE_4 = np.array([
+    [0.0000, 31.6228, 65.1638, 98.7048, 132.2458, 165.7868, 199.3279, 210.6487],  # noqa: E501
+    [30.0000, 61.6894, 95.5776, 134.7603, 168.3013, 201.8424, 215.5678, 180.5821],  # noqa: E501
+    [60.0000, 91.8390, 127.2004, 177.1867, 219.6131, 233.8779, 184.3046, 150.4324],  # noqa: E501
+    [90.0000, 121.8390, 157.2004, np.nan, np.nan, 203.8779, 154.3046, 120.4324],
+    [120.0000, 151.9886, 186.9743, np.nan, np.nan, 161.4514, 122.6818, 90.2828],
+    [150.0000, 181.6228, 213.9233, 186.6618, 158.9370, 125.3959, 92.2680, 60.2162],  # noqa: E501
+    [180.0000, 211.0484, 183.1174, 154.3508, 124.1333, 93.0849, 61.4622, 30.1496],  # noqa: E501
+    [210.0000, 182.4829, 152.0691, 121.6553, 91.2414, 60.8276, 30.4138, 0.0000],
+])
+
+_REF_ALLOCATION_8 = np.array([
+    [1., 1., 1., 1., 1., 1., 1., 2.],
+    [1., 1., 1., 1., 1., 1., 2., 2.],
+    [1., 1., 1., 1., 1., 1., 2., 2.],
+    [1., 1., 1., np.nan, np.nan, 2., 2., 2.],
+    [1., 1., 1., np.nan, np.nan, 2., 2., 2.],
+    [1., 1., 2., 2., 2., 2., 2., 2.],
+    [1., 1., 2., 2., 2., 2., 2., 2.],
+    [1., 2., 2., 2., 2., 2., 2., 2.],
+])
+
+
+@pytest.mark.parametrize("connectivity,expected",
+                         [(8, _REF_DISTANCE_8), (4, _REF_DISTANCE_4)])
+@pytest.mark.parametrize("backend", ['numpy', 'dask+numpy'])
+def test_reference_parity_scipy_csgraph(backend, connectivity, expected):
+    """Distances match scipy.sparse.csgraph.dijkstra on the same graph."""
+    raster = _make_raster(_REF_SOURCE, backend=backend, chunks=(4, 4),
+                          res=_REF_CELLSIZE)
+    elevation = _make_raster(_REF_ELEV, backend=backend, chunks=(4, 4),
+                             res=_REF_CELLSIZE)
+
+    result = _compute(surface_distance(raster, elevation,
+                                       connectivity=connectivity))
+
+    np.testing.assert_array_equal(np.isnan(result), np.isnan(expected))
+    np.testing.assert_allclose(result, expected, rtol=1e-5, equal_nan=True)
+
+
+@pytest.mark.parametrize("backend", ['numpy', 'dask+numpy'])
+def test_reference_parity_allocation(backend):
+    """Allocation matches the scipy reference's nearest-source labels."""
+    raster = _make_raster(_REF_SOURCE, backend=backend, chunks=(4, 4),
+                          res=_REF_CELLSIZE)
+    elevation = _make_raster(_REF_ELEV, backend=backend, chunks=(4, 4),
+                             res=_REF_CELLSIZE)
+
+    result = _compute(surface_allocation(raster, elevation))
+
+    np.testing.assert_array_equal(np.isnan(result),
+                                  np.isnan(_REF_ALLOCATION_8))
+    np.testing.assert_allclose(result, _REF_ALLOCATION_8, equal_nan=True)
+
+
+@pytest.mark.skipif(not has_cuda_and_cupy(), reason="cupy/cuda not available")
+def test_reference_parity_cupy():
+    """The cupy backend reproduces the same reference distances."""
+    raster = _make_raster(_REF_SOURCE, backend='cupy', res=_REF_CELLSIZE)
+    elevation = _make_raster(_REF_ELEV, backend='cupy', res=_REF_CELLSIZE)
+
+    result = _compute(surface_distance(raster, elevation))
+
+    np.testing.assert_allclose(result, _REF_DISTANCE_8, rtol=1e-5,
+                               equal_nan=True)
+
+
+@pytest.mark.parametrize("backend", ['numpy', 'dask+numpy'])
+def test_tilted_plane_matches_analytic_surface_distance(backend):
+    """A tilted plane has a closed-form surface distance.
+
+    On a plane dipping at a constant gradient along +x, the true distance
+    along the surface from the origin is ``sqrt(dx**2 + dy**2 + dz**2)``.
+    The grid graph reproduces it exactly along the row, column and main
+    diagonal through the source, where the octile path is the straight
+    line, so no metrication error enters.
+    """
+    n = 12
+    cellsize = 30.0
+    gradient = 0.5
+
+    _, xx = np.mgrid[0:n, 0:n].astype(np.float64)
+    elev = gradient * xx * cellsize
+    source = np.zeros((n, n), dtype=np.float64)
+    source[0, 0] = 1.0
+
+    raster = _make_raster(source, backend=backend, chunks=(6, 6),
+                          res=cellsize)
+    elevation = _make_raster(elev, backend=backend, chunks=(6, 6),
+                             res=cellsize)
+    result = _compute(surface_distance(raster, elevation))
+
+    k = np.arange(n, dtype=np.float64)
+    # Straight down-dip along row 0.
+    np.testing.assert_allclose(
+        result[0, :], k * cellsize * np.sqrt(1 + gradient ** 2), rtol=1e-5)
+    # Across-dip along column 0: the plane is level in y.
+    np.testing.assert_allclose(result[:, 0], k * cellsize, rtol=1e-5)
+    # Main diagonal.
+    np.testing.assert_allclose(
+        result[np.arange(n), np.arange(n)],
+        np.sqrt(2 * (k * cellsize) ** 2 + (gradient * k * cellsize) ** 2),
+        rtol=1e-5)
+
+
+# ---------------------------------------------------------------------------
+# Heap capacity regression (#3723)
+# ---------------------------------------------------------------------------
+
+
+def _reference_surface_distance(source, elev, connectivity=8, cellsize=1.0):
+    """Pure-Python multi-source Dijkstra reference for surface distance."""
+    import heapq
+
+    h, w = source.shape
+    diag = np.sqrt(2.0) * cellsize
+    if connectivity == 8:
+        nbrs = [(-1, -1, diag), (-1, 0, cellsize), (-1, 1, diag),
+                (0, -1, cellsize), (0, 1, cellsize),
+                (1, -1, diag), (1, 0, cellsize), (1, 1, diag)]
+    else:
+        nbrs = [(0, -1, cellsize), (-1, 0, cellsize),
+                (1, 0, cellsize), (0, 1, cellsize)]
+
+    dist = np.full((h, w), np.inf)
+    heap = []
+    for r in range(h):
+        for c in range(w):
+            if (source[r, c] != 0 and np.isfinite(source[r, c])
+                    and np.isfinite(elev[r, c])):
+                dist[r, c] = 0.0
+                heapq.heappush(heap, (0.0, r, c))
+
+    done = np.zeros((h, w), dtype=bool)
+    while heap:
+        d, r, c = heapq.heappop(heap)
+        if done[r, c]:
+            continue
+        done[r, c] = True
+        for dr, dc, hd in nbrs:
+            vr, vc = r + dr, c + dc
+            if not (0 <= vr < h and 0 <= vc < w) or done[vr, vc]:
+                continue
+            if not np.isfinite(elev[vr, vc]):
+                continue
+            dz = elev[vr, vc] - elev[r, c]
+            nd = d + np.sqrt(hd * hd + dz * dz)
+            if nd < dist[vr, vc]:
+                dist[vr, vc] = nd
+                heapq.heappush(heap, (nd, vr, vc))
+    return dist
+
+
+def _dense_target_scene(n=48, n_targets=921, relief=200.0, seed=1):
+    """Dense-target scene that overflowed the old height*width heap."""
+    rng = np.random.default_rng(seed)
+    source = np.zeros((n, n), dtype=np.float64)
+    source.flat[rng.choice(n * n, size=n_targets, replace=False)] = 1.0
+    elev = rng.random((n, n)) * relief
+    return source, elev
+
+
+def test_dense_targets_do_not_overflow_the_heap():
+    """A lazy-deletion heap can exceed height*width live entries.
+
+    Before #3723 the heap arrays were sized height*width, so this scene
+    made _heap_push write past the end of them (SIGABRT without bounds
+    checking, IndexError with NUMBA_BOUNDSCHECK=1).
+    """
+    source, elev = _dense_target_scene()
+    raster = _make_raster(source)
+    elevation = _make_raster(elev)
+
+    result = _compute(surface_distance(raster, elevation, connectivity=8))
+    expected = _reference_surface_distance(source, elev, connectivity=8)
+
+    assert np.all(np.isfinite(result))
+    np.testing.assert_allclose(result, expected.astype(np.float32),
+                               rtol=1e-5, atol=1e-4)
+
+
+def test_dense_targets_allocation_and_direction_do_not_overflow():
+    """The allocation and direction modes share the same Dijkstra kernel."""
+    source, elev = _dense_target_scene()
+    raster = _make_raster(source)
+    elevation = _make_raster(elev)
+
+    alloc = _compute(surface_allocation(raster, elevation, connectivity=8))
+    direction = _compute(surface_direction(raster, elevation, connectivity=8))
+
+    assert np.all(alloc == 1.0)
+    assert np.all(np.isfinite(direction))
+
+
+@pytest.mark.skipif(da is None, reason="dask not installed")
+def test_dense_targets_dask_iterative_does_not_overflow():
+    """The dask iterative path runs the same kernel per tile."""
+    source, elev = _dense_target_scene()
+    raster_np = _make_raster(source)
+    elev_np = _make_raster(elev)
+    raster = _make_raster(source, backend='dask+numpy', chunks=(48, 48))
+    elevation = _make_raster(elev, backend='dask+numpy', chunks=(48, 48))
+
+    np_result = _compute(surface_distance(raster_np, elev_np))
+    with pytest.warns(UserWarning, match="iterative"):
+        dask_result = _compute(surface_distance(raster, elevation))
+
+    np.testing.assert_allclose(dask_result, np_result, rtol=1e-5,
+                               equal_nan=True)
+
+
+@pytest.mark.skipif(da is None, reason="dask not installed")
+def test_dense_targets_dask_bounded_does_not_overflow():
+    """The bounded map_overlap path runs the kernel per padded chunk."""
+    source, elev = _dense_target_scene()
+    raster_np = _make_raster(source)
+    elev_np = _make_raster(elev)
+    raster = _make_raster(source, backend='dask+numpy', chunks=(16, 16))
+    elevation = _make_raster(elev, backend='dask+numpy', chunks=(16, 16))
+
+    np_result = _compute(surface_distance(raster_np, elev_np,
+                                          max_distance=10.0))
+    dask_result = _compute(surface_distance(raster, elevation,
+                                            max_distance=10.0))
+
+    np.testing.assert_allclose(dask_result, np_result, rtol=1e-5,
+                               equal_nan=True)
+
+
+def test_geodesic_dense_targets_do_not_overflow():
+    """_dijkstra_geodesic carries the same heap sizing."""
+    source, elev = _dense_target_scene(n=32, n_targets=410, relief=200.0)
+    h, w = source.shape
+    coords = {'y': np.linspace(10.0, 10.0 + 0.01 * (h - 1), h),
+              'x': np.linspace(20.0, 20.0 + 0.01 * (w - 1), w)}
+    raster = xr.DataArray(source, dims=['y', 'x'], coords=coords,
+                          attrs={'res': (0.01, 0.01)})
+    elevation = xr.DataArray(elev, dims=['y', 'x'], coords=coords,
+                             attrs={'res': (0.01, 0.01)})
+
+    result = _compute(surface_distance(raster, elevation, method='geodesic'))
+    assert np.all(np.isfinite(result))
+
+
+# ---------------------------------------------------------------------------
+# Backend coverage — every public function on every backend
+# ---------------------------------------------------------------------------
+
+ALL_BACKENDS = ['numpy', 'dask+numpy', 'cupy', 'dask+cupy']
+
+# Bounded vs iterative: with 6x6 chunks, max_distance=4 gives an overlap
+# depth of 5, which fits inside a chunk, so the dask backends take the
+# map_overlap branch.  max_distance=inf forces the iterative tile sweep.
+_BOUNDED = 4.0
+
+
+def _needs(backend):
+    if backend in ('dask+numpy', 'dask+cupy') and da is None:
+        pytest.skip("dask not installed")
+    if backend in ('cupy', 'dask+cupy') and not has_cuda_and_cupy():
+        pytest.skip("cupy/cuda not available")
+
+
+def _parity_scene():
+    """A scene with relief and two distinguishable sources."""
+    source = np.zeros((12, 12), dtype=np.float64)
+    source[2, 3] = 1.0
+    source[9, 8] = 2.0
+    elev = np.random.default_rng(42).uniform(0, 60, (12, 12))
+    return source, elev
+
+
+@pytest.mark.parametrize(
+    "func", [surface_distance, surface_allocation, surface_direction],
+    ids=['distance', 'allocation', 'direction'],
+)
+@pytest.mark.parametrize("backend", ALL_BACKENDS[1:])
+def test_bounded_matches_numpy(func, backend):
+    """Bounded (map_overlap) path matches the numpy baseline everywhere.
+
+    surface_direction had no backend coverage at all before this test.
+    """
+    _needs(backend)
+    source, elev = _parity_scene()
+
+    expected = _compute(func(_make_raster(source), _make_raster(elev),
+                             max_distance=_BOUNDED))
+    actual = _compute(func(_make_raster(source, backend, chunks=(6, 6)),
+                           _make_raster(elev, backend, chunks=(6, 6)),
+                           max_distance=_BOUNDED))
+
+    np.testing.assert_allclose(actual, expected, rtol=1e-5, equal_nan=True)
+
+
+@pytest.mark.parametrize(
+    "func", [surface_distance, surface_allocation, surface_direction],
+    ids=['distance', 'allocation', 'direction'],
+)
+@pytest.mark.parametrize("backend", ['dask+numpy', 'dask+cupy'])
+def test_iterative_matches_numpy_all_modes(func, backend):
+    """Unbounded (iterative tile Dijkstra) path matches numpy.
+
+    Regression test for the direction mode: ``_run_tile`` records global
+    source indices, so ``_finalize_direction`` has to build its pixel
+    grid in global coordinates too.  Before the fix every tile but the
+    top-left one reported a bearing measured from its own origin.
+    """
+    _needs(backend)
+    source, elev = _parity_scene()
+
+    expected = _compute(func(_make_raster(source), _make_raster(elev)))
+    with pytest.warns(UserWarning, match="iterative"):
+        actual = _compute(func(_make_raster(source, backend, chunks=(6, 6)),
+                               _make_raster(elev, backend, chunks=(6, 6))))
+
+    np.testing.assert_allclose(actual, expected, rtol=1e-4, equal_nan=True)
+
+
+def test_iterative_direction_uses_global_pixel_indices():
+    """Explicit check of the bearings the iterative path produces.
+
+    A single source in the top-left chunk of a flat 6x6 raster gives an
+    unambiguous bearing for every pixel.  The bug returned the top-left
+    chunk's bearing field tiled across the whole raster, so (3, 0) read
+    as 0 ("you are the source") instead of 360 (source due north).
+    """
+    if da is None:
+        pytest.skip("dask not installed")
+
+    source = np.zeros((6, 6), dtype=np.float64)
+    source[0, 0] = 1.0
+    elev = np.zeros((6, 6), dtype=np.float64)
+
+    with pytest.warns(UserWarning, match="iterative"):
+        result = _compute(surface_direction(
+            _make_raster(source, 'dask+numpy', chunks=(3, 3)),
+            _make_raster(elev, 'dask+numpy', chunks=(3, 3)),
+        ))
+
+    # Only the source itself reports 0.
+    assert result[0, 0] == 0.0
+    assert np.count_nonzero(result == 0.0) == 1
+    # Column 0 below the source: the source is due north.
+    np.testing.assert_allclose(result[1:, 0], 360.0, atol=1e-4)
+    # Row 0 right of the source: the source is due west.
+    np.testing.assert_allclose(result[0, 1:], 270.0, atol=1e-4)
+    # Perfect diagonal: north-west.
+    for i in range(1, 6):
+        assert result[i, i] == pytest.approx(315.0, abs=1e-4)
+
+
+@pytest.mark.skipif(not has_cuda_and_cupy(), reason="cupy/cuda not available")
+@pytest.mark.skipif(da is None, reason="dask not installed")
+def test_dask_cupy_returns_dask_cupy_array():
+    """dask+cupy input keeps both wrappers on the way out."""
+    source = np.zeros((12, 12), dtype=np.float64)
+    source[5, 5] = 1.0
+    elev = np.zeros((12, 12), dtype=np.float64)
+
+    result = surface_distance(
+        _make_raster(source, 'dask+cupy', chunks=(6, 6)),
+        _make_raster(elev, 'dask+cupy', chunks=(6, 6)),
+        max_distance=_BOUNDED,
+    )
+    assert isinstance(result.data, da.Array)
+    assert is_cupy_array(result.data.compute())
+
+
+@pytest.mark.skipif(not has_cuda_and_cupy(), reason="cupy/cuda not available")
+def test_cupy_direction_returns_cupy_array():
+    """The cupy direction branch converts its numpy result back to cupy."""
+    source = np.zeros((5, 5), dtype=np.float64)
+    source[2, 2] = 1.0
+    elev = np.zeros((5, 5), dtype=np.float64)
+
+    result = surface_direction(_make_raster(source, 'cupy'),
+                               _make_raster(elev, 'cupy'))
+    assert is_cupy_array(result.data)
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_target_values_all_backends(backend):
+    """target_values filtering behaves the same on every backend."""
+    _needs(backend)
+    source = np.zeros((6, 6), dtype=np.float64)
+    source[0, 0] = 1.0
+    source[5, 5] = 2.0
+    elev = np.zeros((6, 6), dtype=np.float64)
+
+    expected = _compute(surface_distance(_make_raster(source),
+                                         _make_raster(elev),
+                                         target_values=[2]))
+    raster = _make_raster(source, backend, chunks=(3, 3))
+    elevation = _make_raster(elev, backend, chunks=(3, 3))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        actual = _compute(surface_distance(raster, elevation,
+                                           target_values=[2]))
+
+    # Only the pixel holding value 2 is a source.
+    assert actual[5, 5] == 0.0
+    assert actual[0, 0] == pytest.approx(5 * np.sqrt(2), abs=1e-4)
+    np.testing.assert_allclose(actual, expected, rtol=1e-5, equal_nan=True)
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_no_sources_all_nan_all_backends(backend):
+    """An all-zero source raster yields NaN everywhere on every backend."""
+    _needs(backend)
+    zeros = np.zeros((4, 4), dtype=np.float64)
+    raster = _make_raster(zeros, backend, chunks=(2, 2))
+    elevation = _make_raster(zeros, backend, chunks=(2, 2))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        assert np.all(np.isnan(_compute(surface_distance(raster, elevation))))
+        assert np.all(np.isnan(_compute(surface_allocation(raster,
+                                                           elevation))))
+        assert np.all(np.isnan(_compute(surface_direction(raster,
+                                                          elevation))))
+
+
+# ---------------------------------------------------------------------------
+# Edge cases — Inf and all-NaN elevation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_inf_elevation_is_a_barrier(backend):
+    """Non-finite elevation blocks paths whether it is NaN or Inf."""
+    _needs(backend)
+    source = np.zeros((1, 5), dtype=np.float64)
+    source[0, 0] = 1.0
+    elev = np.zeros((1, 5), dtype=np.float64)
+    elev[0, 2] = np.inf
+
+    raster = _make_raster(source, backend, chunks=(1, 5))
+    elevation = _make_raster(elev, backend, chunks=(1, 5))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        result = _compute(surface_distance(raster, elevation))
+
+    assert result[0, 0] == 0.0
+    assert result[0, 1] == pytest.approx(1.0, abs=1e-5)
+    # The Inf cell and everything behind it are unreachable.
+    assert np.all(np.isnan(result[0, 2:]))
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_all_nan_elevation(backend):
+    """An entirely impassable elevation surface reaches nothing."""
+    _needs(backend)
+    source = np.zeros((4, 4), dtype=np.float64)
+    source[1, 1] = 1.0
+    elev = np.full((4, 4), np.nan, dtype=np.float64)
+
+    raster = _make_raster(source, backend, chunks=(2, 2))
+    elevation = _make_raster(elev, backend, chunks=(2, 2))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        result = _compute(surface_distance(raster, elevation))
+
+    assert np.all(np.isnan(result))
+
+
+# ---------------------------------------------------------------------------
+# Geometric degeneracies
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_single_pixel_raster(backend):
+    """A 1x1 raster: the pixel is either its own source or unreachable."""
+    _needs(backend)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        hit = _compute(surface_distance(
+            _make_raster(np.array([[1.0]]), backend, chunks=(1, 1)),
+            _make_raster(np.array([[0.0]]), backend, chunks=(1, 1)),
+        ))
+        miss = _compute(surface_distance(
+            _make_raster(np.array([[0.0]]), backend, chunks=(1, 1)),
+            _make_raster(np.array([[0.0]]), backend, chunks=(1, 1)),
+        ))
+
+    assert hit.shape == (1, 1)
+    assert hit[0, 0] == 0.0
+    assert np.isnan(miss[0, 0])
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_column_strip(backend):
+    """An Nx1 column exercises the kernel with no horizontal neighbours."""
+    _needs(backend)
+    source = np.zeros((5, 1), dtype=np.float64)
+    source[0, 0] = 1.0
+    elev = np.zeros((5, 1), dtype=np.float64)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        result = _compute(surface_distance(
+            _make_raster(source, backend, chunks=(2, 1)),
+            _make_raster(elev, backend, chunks=(2, 1)),
+        ))
+
+    np.testing.assert_allclose(result.ravel(), [0.0, 1.0, 2.0, 3.0, 4.0],
+                               rtol=1e-5)
+
+
+# ---------------------------------------------------------------------------
+# Parameter coverage
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_connectivity_4_all_backends(backend):
+    """4-connectivity is honoured by every backend, not just eager numpy."""
+    _needs(backend)
+    source = np.zeros((6, 6), dtype=np.float64)
+    source[0, 0] = 1.0
+    elev = np.zeros((6, 6), dtype=np.float64)
+
+    raster = _make_raster(source, backend, chunks=(3, 3))
+    elevation = _make_raster(elev, backend, chunks=(3, 3))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        conn4 = _compute(surface_distance(raster, elevation, connectivity=4))
+        conn8 = _compute(surface_distance(raster, elevation, connectivity=8))
+
+    # Without diagonals the corner pixel costs two cardinal steps.
+    assert conn4[1, 1] == pytest.approx(2.0, abs=1e-5)
+    assert conn8[1, 1] == pytest.approx(np.sqrt(2), abs=1e-5)
+    # 4-connectivity can never beat 8-connectivity.
+    assert np.all(conn4 >= conn8 - 1e-5)
+
+
+@pytest.mark.parametrize("backend", ['cupy', 'dask+numpy', 'dask+cupy'])
+def test_geodesic_unsupported_backends_raise(backend):
+    """Geodesic mode is numpy-only and says so per backend."""
+    _needs(backend)
+    raster = _make_raster(np.zeros((4, 4)), backend, chunks=(2, 2))
+    elevation = _make_raster(np.zeros((4, 4)), backend, chunks=(2, 2))
+
     with pytest.raises(NotImplementedError, match="geodesic"):
         surface_distance(raster, elevation, method='geodesic')
 
@@ -1231,3 +1816,113 @@ def test_direction_docstring_example_matches_output():
     result = surface_direction(raster, elev)
     assert result.dtype == np.float32
     np.testing.assert_allclose(result.values, expected, rtol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+def test_invalid_dims():
+    """A raster whose dims do not match x/y is rejected by name."""
+    source = _make_raster(np.zeros((3, 3))).rename({'y': 'x', 'x': 'y'})
+    elevation = _make_raster(np.zeros((3, 3)))
+    with pytest.raises(ValueError, match=r"raster.dims should be"):
+        surface_distance(source, elevation)
+
+
+# ---------------------------------------------------------------------------
+# Dataset support
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "func", [surface_distance, surface_allocation, surface_direction],
+    ids=['distance', 'allocation', 'direction'],
+)
+def test_dataset_input(func):
+    """@supports_dataset maps the function over every data variable."""
+    source = np.zeros((1, 4), dtype=np.float64)
+    source[0, 0] = 1.0
+    elevation = _make_raster(np.zeros((1, 4)))
+
+    ds = xr.Dataset(
+        {'a': _make_raster(source), 'b': _make_raster(source * 3.0)},
+        attrs={'source': 'test'},
+    )
+    result = func(ds, elevation)
+
+    assert isinstance(result, xr.Dataset)
+    assert list(result.data_vars) == ['a', 'b']
+    assert result.attrs == {'source': 'test'}
+    for name in ('a', 'b'):
+        expected = func(ds[name], elevation)
+        np.testing.assert_allclose(_compute(result[name]),
+                                   _compute(expected), equal_nan=True)
+
+
+def test_dataset_allocation_keeps_per_variable_values():
+    """Allocation over a Dataset reports each variable's own source values."""
+    source = np.zeros((1, 4), dtype=np.float64)
+    source[0, 0] = 1.0
+    elevation = _make_raster(np.zeros((1, 4)))
+
+    ds = xr.Dataset({'a': _make_raster(source),
+                     'b': _make_raster(source * 3.0)})
+    result = surface_allocation(ds, elevation)
+
+    np.testing.assert_allclose(_compute(result['a']), np.full((1, 4), 1.0))
+    np.testing.assert_allclose(_compute(result['b']), np.full((1, 4), 3.0))
+
+
+# ---------------------------------------------------------------------------
+# Metadata preservation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "func", [surface_distance, surface_allocation, surface_direction],
+    ids=['distance', 'allocation', 'direction'],
+)
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_attrs_and_coords_preserved(func, backend):
+    """Input attrs, coords and dims survive the round trip.
+
+    The module reads ``res`` off the input attrs to build its edge costs,
+    so losing them downstream would break any chained call.
+    """
+    _needs(backend)
+    source = np.zeros((6, 6), dtype=np.float64)
+    source[1, 1] = 1.0
+    elev = np.zeros((6, 6), dtype=np.float64)
+
+    raster = _make_raster(source, backend, chunks=(3, 3))
+    raster.attrs['crs'] = 4326
+    raster.attrs['units'] = 'meters'
+    elevation = _make_raster(elev, backend, chunks=(3, 3))
+
+    result = func(raster, elevation, max_distance=_BOUNDED)
+
+    assert result.attrs == raster.attrs
+    assert result.dims == raster.dims
+    assert result.shape == raster.shape
+    np.testing.assert_array_equal(result.y.values, raster.y.values)
+    np.testing.assert_array_equal(result.x.values, raster.x.values)
+
+
+@pytest.mark.parametrize(
+    "func", [surface_distance, surface_allocation, surface_direction],
+    ids=['distance', 'allocation', 'direction'],
+)
+def test_custom_dim_names_preserved(func):
+    """lat/lon dims are not silently renamed to y/x."""
+    source = np.zeros((4, 4), dtype=np.float64)
+    source[0, 0] = 1.0
+    raster = xr.DataArray(
+        source, dims=['lat', 'lon'],
+        coords={'lat': np.arange(4, dtype=np.float64),
+                'lon': np.arange(4, dtype=np.float64)},
+        attrs={'res': (1.0, 1.0)},
+    )
+    elevation = raster.copy(data=np.zeros((4, 4)))
+
+    result = func(raster, elevation, x='lon', y='lat')
+
+    assert result.dims == ('lat', 'lon')
+    np.testing.assert_array_equal(result.lat.values, raster.lat.values)

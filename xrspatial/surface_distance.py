@@ -86,6 +86,12 @@ _MODE_TASK_NAMES = {
 #   output (float32)            4
 #   direction-mode temps        ~16
 # Total ~80 bytes/pixel.  A 50000x50000 raster needs ~200 GB.
+#
+# The heap terms above are the starting capacity of one entry per pixel.
+# Dense-target rasters push more than that and _heap_grow doubles the
+# three arrays, so the real figure can exceed 80 (48 bytes/pixel of heap
+# after one doubling, and ~72 transiently while the copy is in flight).
+# This estimate is a floor, not a bound.
 _BYTES_PER_PIXEL = 80
 
 # CuPy backend skips the explicit binary heap (parallel relaxation instead)
@@ -168,6 +174,19 @@ def _check_gpu_memory(rows, cols):
 
 
 @ngjit
+def _heap_grow(keys, rows, cols, size):
+    """Return copies of the heap arrays with twice the capacity."""
+    cap = 2 * len(keys)
+    new_keys = np.empty(cap, dtype=np.float64)
+    new_rows = np.empty(cap, dtype=np.int64)
+    new_cols = np.empty(cap, dtype=np.int64)
+    new_keys[:size] = keys[:size]
+    new_rows[:size] = rows[:size]
+    new_cols[:size] = cols[:size]
+    return new_keys, new_rows, new_cols
+
+
+@ngjit
 def _seed_sources(source_data, elev_data, target_values,
                   dist, alloc, src_row, src_col):
     """Seed source pixels into pre-allocated output arrays.
@@ -208,7 +227,13 @@ def _dijkstra(elev_data, height, width, max_distance,
     """
     n_neighbors = len(dy)
 
-    max_heap = height * width
+    # This is a lazy-deletion min-heap: a pixel is pushed again every time
+    # its tentative distance improves, and stale entries linger until a pop
+    # skips them.  Live occupancy therefore tracks the number of improving
+    # relaxations, not the pixel count, so the old fixed height*width heap
+    # let _heap_push write past the end of these arrays (#3723).  Start at
+    # one entry per pixel and double whenever a push would overflow.
+    max_heap = max(height * width, 1)
     h_keys = np.empty(max_heap, dtype=np.float64)
     h_rows = np.empty(max_heap, dtype=np.int64)
     h_cols = np.empty(max_heap, dtype=np.int64)
@@ -220,6 +245,9 @@ def _dijkstra(elev_data, height, width, max_distance,
     for r in range(height):
         for c in range(width):
             if dist[r, c] < np.inf:
+                if h_size == len(h_keys):
+                    h_keys, h_rows, h_cols = _heap_grow(
+                        h_keys, h_rows, h_cols, h_size)
                 h_size = _heap_push(h_keys, h_rows, h_cols, h_size,
                                     dist[r, c], r, c)
 
@@ -257,6 +285,9 @@ def _dijkstra(elev_data, height, width, max_distance,
                 alloc[vr, vc] = alloc[ur, uc]
                 src_row[vr, vc] = src_row[ur, uc]
                 src_col[vr, vc] = src_col[ur, uc]
+                if h_size == len(h_keys):
+                    h_keys, h_rows, h_cols = _heap_grow(
+                        h_keys, h_rows, h_cols, h_size)
                 h_size = _heap_push(h_keys, h_rows, h_cols, h_size,
                                     new_cost, vr, vc)
 
@@ -271,7 +302,8 @@ def _dijkstra_geodesic(elev_data, height, width, max_distance,
     """
     n_neighbors = len(dy)
 
-    max_heap = height * width
+    # See _dijkstra for the heap-capacity rationale.
+    max_heap = max(height * width, 1)
     h_keys = np.empty(max_heap, dtype=np.float64)
     h_rows = np.empty(max_heap, dtype=np.int64)
     h_cols = np.empty(max_heap, dtype=np.int64)
@@ -282,6 +314,9 @@ def _dijkstra_geodesic(elev_data, height, width, max_distance,
     for r in range(height):
         for c in range(width):
             if dist[r, c] < np.inf:
+                if h_size == len(h_keys):
+                    h_keys, h_rows, h_cols = _heap_grow(
+                        h_keys, h_rows, h_cols, h_size)
                 h_size = _heap_push(h_keys, h_rows, h_cols, h_size,
                                     dist[r, c], r, c)
 
@@ -319,6 +354,9 @@ def _dijkstra_geodesic(elev_data, height, width, max_distance,
                 alloc[vr, vc] = alloc[ur, uc]
                 src_row[vr, vc] = src_row[ur, uc]
                 src_col[vr, vc] = src_col[ur, uc]
+                if h_size == len(h_keys):
+                    h_keys, h_rows, h_cols = _heap_grow(
+                        h_keys, h_rows, h_cols, h_size)
                 h_size = _heap_push(h_keys, h_rows, h_cols, h_size,
                                     new_cost, vr, vc)
 
@@ -1658,6 +1696,15 @@ def surface_allocation(
         2-D array of allocation values (float32).  Pixels that cannot
         reach any target are NaN.
 
+    Notes
+    -----
+    When two or more targets are exactly equidistant from a pixel, which
+    one is reported is unspecified and varies by backend: the numpy and
+    dask paths break the tie on Dijkstra's pop order, the cupy path on
+    the order its relaxation passes converge.  The distances themselves
+    agree; only the reported source differs.  Do not depend on the
+    tie-break.
+
     Examples
     --------
     Two sources on opposite corners, separated by a peak in the middle:
@@ -1737,13 +1784,9 @@ def surface_direction(
 
     Notes
     -----
-    On a Dask-backed input with an infinite ``max_distance``, or one large
-    enough that the search radius exceeds the chunk size, the bearings are
-    currently measured from the wrong origin in every chunk except the
-    first.  Track the fix in
-    https://github.com/xarray-contrib/xarray-spatial/issues/3713.  Setting
-    a finite ``max_distance`` smaller than the chunk size takes the
-    ``map_overlap`` path, which is unaffected.
+    When two or more targets are exactly equidistant from a pixel, which
+    one the bearing points at is unspecified and varies by backend.  See
+    :func:`surface_allocation`.
 
     Examples
     --------
