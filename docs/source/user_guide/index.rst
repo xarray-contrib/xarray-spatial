@@ -21,3 +21,4 @@ User Guide
    attrs_contract
    geotiff_safe_io
    local-migration
+   migration_1_0
