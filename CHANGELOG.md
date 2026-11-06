@@ -2,6 +2,58 @@
 -----------
 
 
+### Version 0.10.20 - 2026-10-26
+
+#### Bug fixes and improvements
+- packaging: require NumPy 2.0 or newer and raise ImportError at import time when an older NumPy is installed; numba, scipy, and pandas floors move to 0.60, 1.13, and 2.2.2 (#3754)
+- packaging: lift the NumPy cap to <2.6 and test on Python 3.15 (#3753)
+- README: shorten the AI assistance notice (#3756)
+
+
+### Version 0.10.19 - 2026-10-07
+
+#### Bug fixes and improvements
+- multispectral: subtract blue in the ARVI denominator instead of adding it; every arvi() result changes (#3748)
+- surface_distance: let the GPU relaxation run to convergence instead of stopping at H + W passes and returning NaN for reachable pixels (#3732)
+- surface_distance: sort imports with isort (#3715)
+- proximity: speed up the brute-force kernel with per-metric inner loops and parallel rows (#3744)
+- slope: drop the per-cell NaN early-out in the planar CPU kernel and benchmark the nodata path (#3742)
+- hotspots: replace the nine-branch confidence ladder with boolean arithmetic (#3741)
+- hydro: replace the D8 code-to-offset if/elif chain with a lookup table (#3743)
+- tests: fix the fixture CRS string that pyproj 3.8.0 rejects (#3745)
+
+#### Thanks
+Thanks to @rmz-oz for reporting the ARVI denominator bug (#3747).
+
+
+### Version 0.10.18 - 2026-08-27
+
+#### New features
+- hydro: add an optional weight raster to flow accumulation (#3735)
+- packaging: make the gpu extra pip-installable by dropping cuspatial and using the cupy-cuda12x/13x wheels (#3700)
+- packaging: declare dependency version bounds and test them in CI (#3702)
+
+#### Bug fixes and improvements
+- surface_direction: fix bearings on north-up rasters and on chunked dask input (#3731)
+- surface_distance: reject NaN and negative max_distance (#3720)
+- surface_distance: stop outputs adopting the dask graph token as .name (#3716)
+- surface_distance: benchmark the paths that were never timed (#3717)
+- erosion: stop NaN input from reading out of bounds and flooding the output (#3704)
+- reproject: stop the numba fast path claiming CRSs it cannot reproduce (#3698)
+- proximity: compare nearest-target distances at float32 on every backend (#3690)
+- pathfinding: raise on empty rasters, fix perf nits, and fill test and benchmark gaps (#3706)
+- geotiff: take color_ramp statistics from the materialised COG buffer instead of re-running the source graph (#3696)
+- gpu_rtx: hash mesh data without a full device-to-host copy and launch the triangulation kernel once (#3693)
+- hydro: drop the twi dask+cupy host round-trip and vectorize the watershed init loops (#3694)
+- edge_detection: promote wide integer rasters to float64 (#3686)
+- edge_detection: pin results to scipy.ndimage with golden-value tests and add tests for Inf, boundary NaN, degenerate shapes, and multi-chunk dask (#3681, #3685)
+- edge_detection: add asv benchmarks (#3673)
+- edge_detection: add Examples sections, document NaN propagation, and fix cross-correlation wording and lint (#3683, #3678, #3679)
+
+#### Thanks
+Thanks to @jkingslake for requesting the flow accumulation weight raster (#3734).
+
+
 ### Version 0.10.17 - 2026-07-17
 
 #### Bug fixes and improvements

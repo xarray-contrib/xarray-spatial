@@ -1052,7 +1052,7 @@ class TestCRSPropagation:
         """return_type='geopandas' copies agg.attrs['crs'] onto the gdf."""
         pytest.importorskip("geopandas")
         data = _make_peak()
-        # create_test_raster sets attrs={'res': ..., 'crs': 'EPSG: 5070'}.
+        # create_test_raster sets attrs={'res': ..., 'crs': 'EPSG:5070'}.
         agg = create_test_raster(data, backend='numpy')
         gdf = contours(agg, levels=[1.5], return_type="geopandas")
         # GeoPandas normalizes the CRS; check it resolves to EPSG:5070.

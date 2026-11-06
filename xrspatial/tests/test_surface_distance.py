@@ -1,5 +1,7 @@
 """Tests for xrspatial.surface_distance."""
 
+import warnings
+
 import numpy as np
 import pytest
 import xarray as xr
@@ -299,6 +301,179 @@ def test_direction_cardinal_points():
     assert sd_dir[2, 1] == pytest.approx(360.0, abs=1.0)
 
 
+def test_direction_follows_y_axis_orientation():
+    """Bearings must use the y coordinate, not the row index (#3719).
+
+    A north-up raster has y descending with the row index. Reading the row
+    index as if it were y mirrors every bearing across the east-west axis.
+    """
+    source = np.zeros((3, 3), dtype=np.float64)
+    source[1, 1] = 1.0
+    elev = np.zeros((3, 3), dtype=np.float64)
+
+    def _build(y_coords):
+        return (
+            xr.DataArray(source, dims=['y', 'x'],
+                         coords={'y': y_coords,
+                                 'x': np.arange(3, dtype=np.float64)}),
+            xr.DataArray(elev, dims=['y', 'x'],
+                         coords={'y': y_coords,
+                                 'x': np.arange(3, dtype=np.float64)}),
+        )
+
+    # Descending y: row 0 is north of the source, so it points north (360).
+    north_up = _compute(surface_direction(
+        *_build(np.array([2.0, 1.0, 0.0]))))
+    assert north_up[0, 1] == pytest.approx(360.0, abs=1.0)
+    assert north_up[2, 1] == pytest.approx(180.0, abs=1.0)
+
+    # Ascending y: row 0 is south of the source, so it points south (180).
+    south_up = _compute(surface_direction(
+        *_build(np.array([0.0, 1.0, 2.0]))))
+    assert south_up[0, 1] == pytest.approx(180.0, abs=1.0)
+    assert south_up[2, 1] == pytest.approx(360.0, abs=1.0)
+
+    # East/west is unaffected by the y orientation.
+    for out in (north_up, south_up):
+        assert out[1, 0] == pytest.approx(90.0, abs=1.0)
+        assert out[1, 2] == pytest.approx(270.0, abs=1.0)
+
+
+@pytest.mark.parametrize("backend", ['numpy', 'dask+numpy'])
+@pytest.mark.parametrize("func", [surface_distance, surface_allocation])
+def test_distance_and_allocation_ignore_axis_direction(backend, func):
+    """Only the bearing cares which way the axes run (#3719).
+
+    _compute hands the backends signed cell sizes so _finalize_direction
+    can build a compass bearing. That is safe only because every
+    edge-cost consumer squares or abs()es the cell size first. Flipping
+    the y axis must leave distance and allocation untouched apart from
+    the row order.
+    """
+    source = np.zeros((6, 6), dtype=np.float64)
+    source[1, 1] = 1.0
+    source[4, 4] = 2.0
+    elev = np.random.default_rng(11).uniform(0, 20, (6, 6))
+
+    def _build(y_coords):
+        arrays = []
+        for data in (source, elev):
+            arr = xr.DataArray(
+                data.copy(), dims=['y', 'x'],
+                coords={'y': y_coords, 'x': np.arange(6, dtype=np.float64)},
+                attrs={'res': (1.0, 1.0)})
+            if backend == 'dask+numpy':
+                if da is None:
+                    pytest.skip("dask not installed")
+                arr.data = da.from_array(arr.data, chunks=(3, 3))
+            arrays.append(arr)
+        return arrays
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        up = _compute(func(*_build(np.arange(6, dtype=np.float64))))
+        down = _compute(func(*_build(np.arange(6, dtype=np.float64)[::-1])))
+
+    np.testing.assert_allclose(down, up, rtol=1e-6, equal_nan=True)
+
+
+def test_direction_matches_proximity_direction():
+    """surface_direction on flat terrain agrees with proximity.direction.
+
+    Both document the same compass convention, so on zero relief with one
+    source they must return the same bearings (#3719).
+    """
+    from xrspatial.proximity import direction
+
+    source = np.zeros((5, 5), dtype=np.float64)
+    source[3, 1] = 1.0
+    elev = np.zeros((5, 5), dtype=np.float64)
+    y_coords = np.array([40.0, 39.0, 38.0, 37.0, 36.0])  # descending
+    x_coords = np.arange(5, dtype=np.float64)
+
+    raster = xr.DataArray(source, dims=['y', 'x'],
+                          coords={'y': y_coords, 'x': x_coords})
+    elevation = xr.DataArray(elev, dims=['y', 'x'],
+                             coords={'y': y_coords, 'x': x_coords})
+
+    np.testing.assert_allclose(
+        _compute(surface_direction(raster, elevation)),
+        _compute(direction(raster)),
+        rtol=1e-5,
+    )
+
+
+@pytest.mark.skipif(da is None, reason="dask not installed")
+@pytest.mark.parametrize("max_distance", [np.inf, 4.0])
+def test_dask_direction_matches_numpy(max_distance):
+    """Dask direction must match numpy on every chunk (#3719).
+
+    The unbounded path re-runs each tile with global source indices; those
+    have to be rebased before the bearing is measured against the block's
+    own index grid, or every chunk but the first is wrong.
+    """
+    source = np.zeros((8, 10), dtype=np.float64)
+    source[2, 3] = 1.0
+    elev = np.random.default_rng(7).uniform(0, 5, (8, 10))
+
+    raster_np = _make_raster(source, backend='numpy')
+    elev_np = _make_raster(elev, backend='numpy')
+    raster_dask = _make_raster(source, backend='dask+numpy', chunks=(4, 5))
+    elev_dask = _make_raster(elev, backend='dask+numpy', chunks=(4, 5))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        np_result = _compute(surface_direction(
+            raster_np, elev_np, max_distance=max_distance))
+        dask_result = _compute(surface_direction(
+            raster_dask, elev_dask, max_distance=max_distance))
+
+    np.testing.assert_allclose(dask_result, np_result, rtol=1e-5,
+                               equal_nan=True)
+
+
+@pytest.mark.parametrize("backend", ['numpy', 'dask+numpy'])
+@pytest.mark.parametrize("max_distance", [np.inf, 4.0])
+def test_direction_nan_mask_matches_distance(backend, max_distance):
+    """Direction is NaN exactly where distance is NaN (#3719).
+
+    Guards the tiled dask path, where a chunk whose source lives in a
+    neighbouring chunk must still get a bearing.
+    """
+    source = np.zeros((8, 10), dtype=np.float64)
+    source[2, 3] = 1.0
+    elev = np.random.default_rng(7).uniform(0, 5, (8, 10))
+
+    raster = _make_raster(source, backend=backend, chunks=(4, 5))
+    elevation = _make_raster(elev, backend=backend, chunks=(4, 5))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        dist = _compute(surface_distance(raster, elevation,
+                                         max_distance=max_distance))
+        bearing = _compute(surface_direction(raster, elevation,
+                                             max_distance=max_distance))
+
+    np.testing.assert_array_equal(np.isnan(bearing), np.isnan(dist))
+
+
+@pytest.mark.skipif(not has_cuda_and_cupy(), reason="cupy/cuda not available")
+def test_cupy_direction_matches_numpy():
+    """CuPy direction must match the numpy baseline (#3719)."""
+    source = np.zeros((8, 10), dtype=np.float64)
+    source[2, 3] = 1.0
+    elev = np.random.default_rng(7).uniform(0, 5, (8, 10))
+
+    np_result = _compute(surface_direction(
+        _make_raster(source), _make_raster(elev)))
+    cp_result = _compute(surface_direction(
+        _make_raster(source, backend='cupy'),
+        _make_raster(elev, backend='cupy')))
+
+    np.testing.assert_allclose(cp_result, np_result, rtol=1e-5,
+                               equal_nan=True)
+
+
 # ---------------------------------------------------------------------------
 # Tests — max_distance clipping
 # ---------------------------------------------------------------------------
@@ -406,6 +581,36 @@ def test_invalid_method():
     elev = _make_raster(np.zeros((3, 3)))
     with pytest.raises(ValueError, match="method"):
         surface_distance(source, elev, method='fast')
+
+
+@pytest.mark.parametrize("backend", ['numpy', 'dask+numpy', 'cupy',
+                                     'dask+cupy'])
+@pytest.mark.parametrize("func", [surface_distance, surface_allocation,
+                                  surface_direction])
+@pytest.mark.parametrize("bad", [np.nan, -5.0])
+def test_invalid_max_distance(backend, func, bad):
+    """NaN / negative max_distance must raise, not diverge by backend.
+
+    Before this check NaN slipped past the numpy kernel's `cost_u >
+    max_distance` break (full unbounded surface) but blocked the CUDA
+    kernel's `best <= max_distance` accept (seeds only), and a negative
+    budget reached dask as a negative map_overlap depth.  See issue #3711.
+    """
+    data = np.zeros((4, 4))
+    data[0, 0] = 1.0
+    source = _make_raster(data, backend=backend)
+    elev = _make_raster(np.zeros((4, 4)), backend=backend)
+    with pytest.raises(ValueError, match="max_distance must be non-negative"):
+        func(source, elev, max_distance=bad)
+
+
+@pytest.mark.parametrize("bad", [1.0, [[1.0, 2.0], [3.0, 4.0]]])
+def test_invalid_target_values_shape(bad):
+    """Non-1D target_values must be rejected before reaching numba."""
+    source = _make_raster(np.ones((3, 3)))
+    elev = _make_raster(np.zeros((3, 3)))
+    with pytest.raises(ValueError, match="target_values must be a 1-D"):
+        surface_distance(source, elev, target_values=bad)
 
 
 # ---------------------------------------------------------------------------
@@ -543,6 +748,47 @@ def test_cupy_matches_numpy():
                                equal_nan=True)
 
 
+def _serpentine_elevation(n):
+    """NaN barriers everywhere except one winding open corridor.
+
+    The corridor from (0, 0) is about n*n/2 pixel hops long, far more than
+    the n+n the GPU relaxation used to allow itself.
+    """
+    elev = np.full((n, n), np.nan, dtype=np.float64)
+    for r in range(0, n, 2):
+        elev[r, :] = 0.0
+    for r in range(1, n, 2):
+        elev[r, n - 1 if (r // 2) % 2 == 0 else 0] = 0.0
+    return elev
+
+
+@pytest.mark.skipif(not has_cuda_and_cupy(), reason="cupy/cuda not available")
+@pytest.mark.parametrize(
+    "mode", [surface_distance, surface_allocation, surface_direction])
+def test_cupy_long_path_matches_numpy(mode):
+    """CuPy must relax until it converges, not for a fixed H+W (#3721).
+
+    A winding corridor needs far more relaxation passes than the raster is
+    wide plus tall. Stopping early makes reachable pixels come back NaN,
+    which reads as "no path exists".
+    """
+    n = 16
+    elev = _serpentine_elevation(n)
+    source = np.zeros((n, n), dtype=np.float64)
+    source[0, 0] = 1.0
+
+    np_result = _compute(mode(_make_raster(source), _make_raster(elev)))
+    cp_result = _compute(mode(_make_raster(source, backend='cupy'),
+                              _make_raster(elev, backend='cupy')))
+
+    # The corridor is genuinely reachable end to end on the CPU.
+    assert np.isfinite(np_result[n - 1, 0])
+    assert int(np.isfinite(np_result).sum()) > 4 * n
+
+    np.testing.assert_allclose(cp_result, np_result, rtol=1e-5,
+                               equal_nan=True)
+
+
 @pytest.mark.skipif(not has_cuda_and_cupy(), reason="cupy/cuda not available")
 def test_cupy_returns_cupy_array():
     """CuPy input should produce CuPy output."""
@@ -673,6 +919,71 @@ def test_geodesic_basic():
     # Cardinal neighbours should be ~111 km (1 degree at equator)
     for pos in [(0, 1), (2, 1), (1, 0), (1, 2)]:
         assert 100000 < sd[pos] < 130000  # roughly 100-130 km
+
+
+# ---------------------------------------------------------------------------
+# Metadata propagation (issue #3708)
+# ---------------------------------------------------------------------------
+
+
+def _metadata_backends():
+    backends = ['numpy']
+    if da is not None:
+        backends.append('dask+numpy')
+    if has_cuda_and_cupy():
+        backends.append('cupy')
+        if da is not None:
+            backends.append('dask+cupy')
+    return backends
+
+
+@pytest.mark.parametrize("func", [surface_distance, surface_allocation,
+                                  surface_direction])
+@pytest.mark.parametrize("max_distance", [3.0, np.inf],
+                         ids=['bounded', 'unbounded'])
+@pytest.mark.parametrize("backend", _metadata_backends())
+def test_output_name_consistent_across_backends(backend, max_distance, func):
+    """Outputs must not adopt the dask graph token as .name.
+
+    Without the post-construction reset the dask backends returned
+    '_trim-<hash>' (bounded map_overlap route),
+    'xrspatial.surface_*-<hash>' (unbounded iterative route) or
+    'asarray-<hash>' (dask+cupy unbounded), while numpy and cupy returned
+    None.  Same bug class as cost_distance #3344 and pathfinding #3652.
+    """
+    source = np.zeros((6, 6), dtype=np.float64)
+    source[0, 0] = 1.0
+    elev = np.arange(36, dtype=np.float64).reshape(6, 6) * 0.1
+    raster = _make_raster(source, backend=backend)
+    elevation = _make_raster(elev, backend=backend)
+
+    result = func(raster, elevation, max_distance=max_distance)
+    assert result.name is None
+
+
+@pytest.mark.parametrize("func", [surface_distance, surface_allocation,
+                                  surface_direction])
+@pytest.mark.parametrize("backend", _metadata_backends())
+def test_output_preserves_attrs_coords_dims(backend, func):
+    """attrs, coords and dims come through unchanged on every backend."""
+    source = np.zeros((6, 6), dtype=np.float64)
+    source[0, 0] = 1.0
+    elev = np.arange(36, dtype=np.float64).reshape(6, 6) * 0.1
+    raster = _make_raster(source, backend=backend)
+    elevation = _make_raster(elev, backend=backend)
+    raster.attrs.update({'crs': 3857, 'nodatavals': (-9999.0,),
+                         'transform': (1.0, 0.0, 0.0, 0.0, -1.0, 0.0)})
+    raster = raster.assign_coords(spatial_ref=0)
+
+    result = func(raster, elevation, max_distance=3.0)
+
+    assert result.dims == raster.dims
+    assert result.attrs == raster.attrs
+    assert set(result.coords) == set(raster.coords)
+    for name in raster.coords:
+        np.testing.assert_array_equal(result.coords[name].values,
+                                      raster.coords[name].values)
+    assert result.dtype == np.float32
 
 
 # ---------------------------------------------------------------------------
