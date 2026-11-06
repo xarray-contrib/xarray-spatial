@@ -3,7 +3,7 @@
 Two complementary functions:
 - ``watershed(flow_dir, pour_points)`` — labels each cell with the
   pour point it drains to; cells not reaching any pour point → NaN.
-- ``basins(flow_dir)`` — automatically identifies all outlets (pits +
+- ``basin(flow_dir)`` — automatically identifies all outlets (pits +
   edge-exit cells) and labels every valid cell; no pour points needed.
 
 Both use **downstream tracing with path compression** on CPU — follow

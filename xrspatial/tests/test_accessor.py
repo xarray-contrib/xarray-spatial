@@ -865,3 +865,20 @@ def test_coregister_raster_preserves_dask_backend():
     out = grid.xrs.coregister(src)
     assert isinstance(out.data, da.Array)
     assert out.shape == grid.shape
+
+
+def test_accessor_crop_uses_zone_ids_keyword():
+    """The accessor's crop() takes zone_ids like the function; zones_ids is gone (#3762)."""
+    import pytest
+    from xrspatial.zonal import crop
+
+    arr = np.array([[0, 4, 0, 3],
+                    [0, 4, 4, 3],
+                    [0, 1, 1, 3],
+                    [0, 0, 0, 0]], dtype=np.int64)
+    raster = xr.DataArray(arr, dims=('y', 'x'))
+    via_accessor = raster.xrs.crop(raster, zone_ids=(1, 3))
+    direct = crop(raster, raster, zone_ids=(1, 3))
+    xr.testing.assert_identical(via_accessor, direct)
+    with pytest.raises(TypeError, match="zone_ids"):
+        raster.xrs.crop(raster, zones_ids=(1, 3))

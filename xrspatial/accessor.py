@@ -1301,9 +1301,9 @@ class XrsSpatialDataArrayAccessor:
         from .zonal import hypsometric_integral
         return hypsometric_integral(zones, self._obj, **kwargs)
 
-    def crop(self, zones, zones_ids, **kwargs):
+    def crop(self, zones, zone_ids, **kwargs):
         from .zonal import crop
-        return crop(zones, self._obj, zones_ids, **kwargs)
+        return crop(zones, self._obj, zone_ids, **kwargs)
 
     def clip_polygon(self, geometry, **kwargs):
         from .polygon_clip import clip_polygon
