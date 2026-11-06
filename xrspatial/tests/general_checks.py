@@ -32,7 +32,7 @@ def create_test_raster(
         backend='numpy',
         name='myraster',
         dims=['y', 'x'],
-        attrs={'res': (0.5, 0.5), 'crs': 'EPSG: 5070'},
+        attrs={'res': (0.5, 0.5), 'crs': 'EPSG:5070'},
         chunks=(3, 3)
 ):
     raster = xr.DataArray(data, name=name, dims=dims, attrs=attrs)

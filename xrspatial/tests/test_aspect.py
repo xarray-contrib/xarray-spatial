@@ -271,7 +271,7 @@ def _rectangular_cell_raster(backend='numpy', xres=10.0, yres=1.0):
     data = (X + Y).astype(np.float64)
     return create_test_raster(
         data, backend=backend,
-        attrs={'res': (xres, yres), 'crs': 'EPSG: 5070'})
+        attrs={'res': (xres, yres), 'crs': 'EPSG:5070'})
 
 
 @pytest.mark.parametrize("backend", ['numpy', 'dask+numpy'])
