@@ -579,7 +579,7 @@ def test_hydro_accessor_matches_direct(method_name, elevation):
 
 _ALL_HYDRO_METHODS = [
     'flow_direction', 'flow_direction_dinf', 'flow_direction_mfd',
-    'flow_accumulation', 'flow_accumulation_mfd', 'watershed', 'basin', 'basins',
+    'flow_accumulation', 'flow_accumulation_mfd', 'watershed', 'basin',
     'sink', 'fill', 'stream_order', 'stream_link', 'snap_pour_point',
     'flow_path', 'flow_length', 'twi', 'hand',
 ]

@@ -17,7 +17,7 @@ from xrspatial.tests.general_checks import create_test_raster
 WRAPPERS = [
     'flow_direction', 'flow_accumulation', 'flow_length', 'flow_path',
     'watershed', 'hand', 'stream_link', 'stream_order',
-    'basin', 'basins', 'sink', 'snap_pour_point', 'fill', 'twi',
+    'basin', 'sink', 'snap_pour_point', 'fill', 'twi',
 ]
 
 # Representative suffixed implementations across every family.
@@ -26,7 +26,7 @@ SUFFIXED = [
     'flow_accumulation_d8', 'flow_accumulation_dinf', 'flow_accumulation_mfd',
     'flow_length_d8', 'flow_path_mfd', 'watershed_dinf', 'hand_mfd',
     'stream_link_d8', 'stream_order_dinf',
-    'basin_d8', 'basins_d8', 'sink_d8', 'snap_pour_point_d8', 'fill_d8',
+    'basin_d8', 'sink_d8', 'snap_pour_point_d8', 'fill_d8',
     'twi_d8',
 ]
 

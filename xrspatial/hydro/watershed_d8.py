@@ -1070,15 +1070,3 @@ def watershed_d8(flow_dir: xr.DataArray,
                         coords=flow_dir.coords,
                         dims=flow_dir.dims,
                         attrs=flow_dir.attrs)
-
-
-def basins_d8(flow_dir, name='basins'):
-    """Backward-compatible wrapper; use :func:`basin` instead."""
-    import warnings
-    warnings.warn(
-        "basins_d8 is deprecated; use basin (basin_d8) instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    from .basin_d8 import basin_d8
-    return basin_d8(flow_dir, name=name)

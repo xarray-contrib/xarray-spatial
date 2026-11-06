@@ -2333,32 +2333,17 @@ def test_focal_stats_dask_advertised_dtype_matches_computed_3217(backend, in_dty
 _api_kernel = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=np.float64)
 
 
-def test_apply_raster_kwarg_deprecated():
+def test_apply_raster_kwarg_removed():
+    """The 0.x raster= spelling is gone in 1.0.0 (#3762); agg is the input."""
     agg = xr.DataArray(data_random)
-    with pytest.warns(DeprecationWarning, match="raster"):
-        deprecated = apply(raster=agg, kernel=_api_kernel)
-    current = apply(agg, _api_kernel)
-    np.testing.assert_array_equal(deprecated.data, current.data)
+    with pytest.raises(TypeError, match="raster"):
+        apply(raster=agg, kernel=_api_kernel)
 
 
-def test_apply_raster_and_agg_conflict():
-    agg = xr.DataArray(data_random)
-    with pytest.raises(TypeError):
-        apply(agg, _api_kernel, raster=agg)
-
-
-def test_hotspots_raster_kwarg_deprecated():
+def test_hotspots_raster_kwarg_removed():
     agg = xr.DataArray(data_random * 100)
-    with pytest.warns(DeprecationWarning, match="raster"):
-        deprecated = hotspots(raster=agg, kernel=_api_kernel)
-    current = hotspots(agg, _api_kernel)
-    np.testing.assert_array_equal(deprecated.data, current.data)
-
-
-def test_hotspots_raster_and_agg_conflict():
-    agg = xr.DataArray(data_random * 100)
-    with pytest.raises(TypeError):
-        hotspots(agg, _api_kernel, raster=agg)
+    with pytest.raises(TypeError, match="raster"):
+        hotspots(raster=agg, kernel=_api_kernel)
 
 
 def test_focal_stats_name():
@@ -2437,8 +2422,6 @@ def test_hotspots_name_gpu():
     import cupy
     agg = xr.DataArray(cupy.asarray(data_random * 100))
     assert hotspots(agg, _api_kernel).name == 'hotspots'
-    with pytest.warns(DeprecationWarning, match="raster"):
-        hotspots(raster=agg, kernel=_api_kernel)
 
 
 # ---------------------------------------------------------------------------

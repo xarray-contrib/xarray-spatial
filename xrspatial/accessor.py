@@ -1063,10 +1063,6 @@ class XrsSpatialDataArrayAccessor:
         from .hydro import basin
         return basin(self._obj, **kwargs)
 
-    def basins(self, **kwargs):
-        from .hydro import basins
-        return basins(self._obj, **kwargs)
-
     def sink(self, **kwargs):
         from .hydro import sink
         return sink(self._obj, **kwargs)
@@ -1863,10 +1859,6 @@ class XrsSpatialDatasetAccessor:
         from .hydro import basin
         return basin(self._obj, **kwargs)
 
-    def basins(self, **kwargs):
-        from .hydro import basins
-        return basins(self._obj, **kwargs)
-
     def sink(self, **kwargs):
         from .hydro import sink
         return sink(self._obj, **kwargs)
@@ -2362,7 +2354,6 @@ _DOC_SOURCE_OVERRIDES = {
     'flow_direction': 'flow_direction_d8',
     'flow_accumulation': 'flow_accumulation_d8',
     'basin': 'basin_d8',
-    'basins': 'basins_d8',
     'watershed': 'watershed_d8',
     'snap_pour_point': 'snap_pour_point_d8',
     'flow_path': 'flow_path_d8',
