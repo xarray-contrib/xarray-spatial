@@ -24,37 +24,37 @@ Removed aliases
      - Deprecated since
    * - ``xrspatial.basins`` / ``xrspatial.hydro.basins`` / ``basins_d8``
      - ``basin`` / ``basin_d8``
-     - 0.10.x
+     - 0.10.2
    * - ``crop(zones_ids=...)``
      - ``crop(zone_ids=...)``
-     - 0.10.x
+     - 0.10.1
    * - ``focal.apply(raster=...)`` and ``hotspots(raster=...)``
      - ``agg=``
-     - 0.10.x
+     - 0.10.2
    * - ``natural_breaks(agg, k, name, num_sample)`` positional ``num_sample``
      - ``natural_breaks(agg, k, num_sample=...)``
-     - 0.10.x
+     - 0.10.11
    * - ``rasterize(use_cuda=...)``
      - ``rasterize(gpu=...)``
-     - 0.10.x
+     - 0.10.7
    * - ``reproject(src_vertical_crs=..., tgt_vertical_crs=...)``
      - ``source_vertical_crs=``, ``target_vertical_crs=``
-     - 0.10.x
+     - 0.10.2
    * - ``open_geotiff(mask_nodata=...)``
      - ``open_geotiff(masked=...)``. Note the default is ``False``.
-     - 0.10.x
+     - 0.10.5
    * - ``open_geotiff(name=...)``
      - ``open_geotiff(default_name=...)``
-     - 0.10.x
+     - 0.10.5
    * - ``open_geotiff(mask_and_scale=...)``
      - ``open_geotiff(unpack=...)``
-     - 0.10.x
+     - 0.10.7
    * - ``plot_geotiff(...)``
      - ``da.xrs.plot(...)``
      - 0.10.0
    * - ``owa(criterion_weights=...)``
      - ``owa(weights=...)``
-     - 0.10.x
+     - 0.10.7
 
 Two private helpers also lost old spellings: the VRT writer's ``vrt_path=``
 and ``crs_wkt=`` (now ``path=`` and ``crs=``) and the GPU reader's
