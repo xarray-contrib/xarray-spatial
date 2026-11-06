@@ -1771,12 +1771,13 @@ def surface_direction(
         >>> elev['x'] = np.arange(m)
 
         >>> surface_direction(raster, elev).values
-        array([[135., 180., 225.],
+        array([[ 45., 360., 315.],
                [ 90.,   0., 270.],
-               [ 45., 360., 315.]], dtype=float32)
+               [135., 180., 225.]], dtype=float32)
 
-    The pixel east of the source reads 270 (west) because the bearing
-    points back at the source, and the source itself reads 0.
+    The raster is north-up (``y`` descends with the row index), so the
+    row above the source reads 360 and the row below reads 180, the same
+    convention :func:`xrspatial.direction` uses.  The source itself reads 0.
     """
     result_data = _compute(
         raster, elevation, x, y, target_values, max_distance,

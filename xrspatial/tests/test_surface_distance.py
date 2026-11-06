@@ -1225,9 +1225,9 @@ def test_direction_docstring_example_matches_output():
     ])
     raster, elev = _docstring_example_rasters(source, np.zeros((3, 3)))
 
-    expected = np.array([[135., 180., 225.],
+    expected = np.array([[45., 360., 315.],
                          [90., 0., 270.],
-                         [45., 360., 315.]], dtype=np.float32)
+                         [135., 180., 225.]], dtype=np.float32)
     result = surface_direction(raster, elev)
     assert result.dtype == np.float32
     np.testing.assert_allclose(result.values, expected, rtol=1e-6)
