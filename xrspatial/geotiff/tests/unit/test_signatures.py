@@ -412,13 +412,17 @@ _CANONICAL_ORDER = (
     "allow_experimental_codecs",
     "allow_internal_only_jpeg",
     "band_nodata",
-    # rioxarray ``open_rasterio`` masking flag (default False).
+    # rioxarray ``open_rasterio`` masking flag (default False) on
+    # ``open_geotiff``; the internal readers spell it ``mask_nodata``.
     "masked",
+    "mask_nodata",
     # rioxarray-compatible read options. ``unpack`` and ``parse_coordinates``
     # are threaded into ``read_geotiff_dask``; ``unpack`` also reaches the
-    # GPU / dask+GPU backends (#3071). ``lock`` / ``cache`` are
-    # open_geotiff-only accept-and-warn shims.
+    # GPU / dask+GPU backends (#3071) and the internal readers spell it
+    # ``mask_and_scale``. ``lock`` / ``cache`` are open_geotiff-only
+    # accept-and-warn shims.
     "unpack",
+    "mask_and_scale",
     "parse_coordinates",
     "lock",
     "cache",
@@ -462,8 +466,11 @@ def _assert_canonical(fn, allowed_tail=()):
 def test_open_geotiff_defines_canonical_order():
     """``open_geotiff``'s signature is the canonical reference."""
     params = _kwonly_params(open_geotiff)
-    # ``name`` is the internal readers' spelling of ``default_name``.
-    expected = [p for p in _CANONICAL_ORDER if p != "name"]
+    # ``name`` / ``mask_nodata`` / ``mask_and_scale`` are the internal
+    # readers' spellings of ``default_name`` / ``masked`` / ``unpack``; the
+    # public function only accepts the rioxarray names.
+    internal_only = {"name", "mask_nodata", "mask_and_scale"}
+    expected = [p for p in _CANONICAL_ORDER if p not in internal_only]
     assert params == expected, (
         f"open_geotiff kw-only params {params!r} no longer match the "
         f"canonical order {expected!r}. Update both the function and the "
