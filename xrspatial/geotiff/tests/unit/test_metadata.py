@@ -1349,17 +1349,8 @@ def test_read_geotiff_dask_band_nodata_rejects_unknown_value_1987(tmp_path):
 # ===========================================================================
 
 
-def test_gpu_deprecated_sentinel_is_singleton():
-    assert geotiff_pkg._GPU_DEPRECATED_SENTINEL is _runtime._GPU_DEPRECATED_SENTINEL
-
-
 def test_on_gpu_failure_sentinel_is_singleton():
     assert geotiff_pkg._ON_GPU_FAILURE_SENTINEL is _runtime._ON_GPU_FAILURE_SENTINEL
-
-
-def test_crs_wkt_deprecated_sentinel_is_singleton():
-    assert geotiff_pkg._CRS_WKT_DEPRECATED_SENTINEL is \
-        _runtime._CRS_WKT_DEPRECATED_SENTINEL
 
 
 def test_missing_sources_sentinel_is_singleton():

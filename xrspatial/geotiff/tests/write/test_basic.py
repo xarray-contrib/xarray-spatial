@@ -897,14 +897,11 @@ def test_write_vrt_signature_first_arg_is_path():
     """
     sig = inspect.signature(_build_vrt)
     params = list(sig.parameters)
-    # ``path`` is the new canonical name, ``source_files`` follows.
-    # ``vrt_path`` is kept as a keyword-only deprecated alias.
+    # ``path`` is the canonical name, ``source_files`` follows. The 0.x
+    # ``vrt_path`` alias was removed in 1.0.
     assert params[0] == 'path'
     assert params[1] == 'source_files'
-    assert 'vrt_path' in params
-    # ``vrt_path`` is keyword-only (the alias should never be used
-    # positionally going forward).
-    assert sig.parameters['vrt_path'].kind == inspect.Parameter.KEYWORD_ONLY
+    assert 'vrt_path' not in params
 
 
 def test_write_vrt_positional_path_works(tmp_path):
@@ -928,8 +925,7 @@ def test_write_vrt_path_kwarg_works(tmp_path):
 
     A caller who passes everything by keyword (no positional args)
     previously could not reach the function because the ``path`` kwarg
-    did not exist; this is the path-symmetric counterpart to the existing
-    ``_build_vrt(vrt_path=...)`` test below.
+    did not exist.
     """
     src = _build_source_tif(tmp_path)
     out = str(tmp_path / 'out.vrt')
@@ -940,57 +936,24 @@ def test_write_vrt_path_kwarg_works(tmp_path):
     assert os.path.exists(out)
 
 
-def test_write_vrt_vrt_path_kwarg_emits_deprecation_warning(tmp_path):
-    """``vrt_path=...`` works but emits ``DeprecationWarning``.
-
-    Mirrors the existing ``crs_wkt`` deprecation in the same writer:
-    old name still works, but caller sees a clear migration
-    hint via the warning.
-    """
+def test_write_vrt_vrt_path_kwarg_removed(tmp_path):
+    """The old ``vrt_path=`` spelling is gone in 1.0; use ``path=``."""
     src = _build_source_tif(tmp_path)
     out = str(tmp_path / 'out.vrt')
-    with pytest.warns(DeprecationWarning, match='vrt_path'):
-        result = _build_vrt(vrt_path=out, source_files=[src])
-    assert result == out
-    assert os.path.exists(out)
-
-
-def test_write_vrt_path_and_vrt_path_together_raises(tmp_path):
-    """Both names supplied is ambiguous; refuse to pick one.
-
-    Mirrors the ``crs`` / ``crs_wkt`` rule documented in the existing
-    _build_vrt source: passing both is rejected with TypeError
-    regardless of whether the two values happen to match.
-    """
-    src = _build_source_tif(tmp_path)
-    out = str(tmp_path / 'out.vrt')
-    with pytest.raises(TypeError, match="path.*vrt_path"):
-        _build_vrt(path=out, vrt_path=out, source_files=[src])
+    with pytest.raises(TypeError, match="unexpected keyword argument 'vrt_path'"):
+        _build_vrt(vrt_path=out, source_files=[src])
 
 
 def test_write_vrt_no_path_raises(tmp_path):
-    """Neither ``path`` nor ``vrt_path`` -> TypeError.
-
-    Before the shim, omitting the first positional argument raised
-    ``TypeError: missing 1 required positional argument`` from CPython.
-    The shim adds a sentinel default so the kwarg-only positional no
-    longer triggers that automatic check; the explicit raise inside
-    the shim preserves the original error semantics.
-    """
+    """Omitting ``path`` raises a TypeError that names the argument."""
     src = _build_source_tif(tmp_path)
     with pytest.raises(TypeError, match='path'):
         _build_vrt(source_files=[src])
 
 
 def test_write_vrt_explicit_path_none_raises(tmp_path):
-    """``_build_vrt(path=None, ...)`` is rejected with TypeError.
-
-    The sentinel-default pattern distinguishes "caller
-    passed nothing" (sentinel) from "caller passed None explicitly".
-    Explicit ``None`` is a bug in the caller's code, not a request to
-    fall through to the deprecated ``vrt_path`` alias, so the shim
-    raises with a clear message that names the offending kwarg.
-    """
+    """``_build_vrt(path=None, ...)`` is rejected with a TypeError that
+    names the offending kwarg."""
     src = _build_source_tif(tmp_path)
     with pytest.raises(TypeError, match="'path'.*None"):
         _build_vrt(path=None, source_files=[src])
@@ -1030,29 +993,6 @@ def test_write_vrt_first_arg_name_matches_writer_trio():
     assert eager_first == 'path'
     assert gpu_first == 'path'
     assert vrt_first == 'path'
-
-
-def test_write_vrt_path_round_trip_matches_old(tmp_path):
-    """The written VRT decodes the same regardless of which kwarg name
-    the caller used.
-
-    Smoke test that the shim does not silently drop or re-route any of
-    the other kwargs while resolving ``path`` vs ``vrt_path``.
-    """
-    src = _build_source_tif(tmp_path)
-    out_new = str(tmp_path / 'out_new.vrt')
-    out_old = str(tmp_path / 'out_old.vrt')
-
-    _build_vrt(out_new, [src])
-    with warnings.catch_warnings():
-        # ignore the deprecation; we still need the legacy path to
-        # produce a byte-identical mosaic.
-        warnings.simplefilter('ignore', DeprecationWarning)
-        _build_vrt(vrt_path=out_old, source_files=[src])
-
-    a_new = _read_vrt(out_new)
-    a_old = _read_vrt(out_old)
-    np.testing.assert_array_equal(np.asarray(a_new), np.asarray(a_old))
 
 
 # -------------------------------------------------------------------------
@@ -1150,12 +1090,11 @@ def test_write_vrt_no_crs_kwarg_no_warning(tmp_path):
     assert os.path.exists(vrt_path)
 
 
-# --- Deprecation shim: ``crs_wkt=`` still works but warns ---
+# --- ``crs_wkt=`` was removed in 1.0; ``crs=`` takes WKT too ---
 
 
-def test_write_vrt_crs_wkt_deprecated_warns(tmp_path):
-    """Passing ``crs_wkt=<wkt>`` emits ``DeprecationWarning`` but still
-    produces a working VRT."""
+def test_write_vrt_crs_wkt_removed(tmp_path):
+    """The old ``crs_wkt=`` spelling is gone; pass the WKT via ``crs=``."""
     src = _build_source_tif(tmp_path, 'depr.tif')
     vrt_path = str(tmp_path / 'depr.vrt')
 
@@ -1163,38 +1102,12 @@ def test_write_vrt_crs_wkt_deprecated_warns(tmp_path):
 
     wkt = CRS.from_epsg(4326).to_wkt()
 
-    with pytest.warns(DeprecationWarning, match='crs_wkt'):
-        out = _build_vrt(vrt_path, [src], crs_wkt=wkt)
+    with pytest.raises(TypeError, match="unexpected keyword argument 'crs_wkt'"):
+        _build_vrt(vrt_path, [src], crs_wkt=wkt)
+    out = _build_vrt(vrt_path, [src], crs=wkt)
     assert out == vrt_path
     da = _read_vrt(vrt_path)
     assert da.attrs.get('crs') == 4326
-
-
-def test_write_vrt_crs_wkt_none_still_warns(tmp_path):
-    """``crs_wkt=None`` (explicit) was a documented shape in the old
-    signature -- it now warns because the caller is using the
-    deprecated kwarg name, even if the value is None."""
-    src = _build_source_tif(tmp_path, 'depr_none.tif')
-    vrt_path = str(tmp_path / 'depr_none.vrt')
-
-    with pytest.warns(DeprecationWarning, match='crs_wkt'):
-        _build_vrt(vrt_path, [src], crs_wkt=None)
-    assert os.path.exists(vrt_path)
-
-
-def test_write_vrt_both_crs_and_crs_wkt_rejected(tmp_path):
-    """Passing both raises ``TypeError`` rather than silently picking
-    one. The error message names both kwargs so the caller can fix
-    their call quickly."""
-    src = _build_source_tif(tmp_path, 'both.tif')
-    vrt_path = str(tmp_path / 'both.vrt')
-
-    from pyproj import CRS
-
-    wkt = CRS.from_epsg(4326).to_wkt()
-
-    with pytest.raises(TypeError, match='crs.*crs_wkt'):
-        _build_vrt(vrt_path, [src], crs=4326, crs_wkt=wkt)
 
 
 # --- Cross-writer parity: same kwarg name on all three writers ---

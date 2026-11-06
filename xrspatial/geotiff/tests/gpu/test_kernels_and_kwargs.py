@@ -16,9 +16,9 @@ Sections (in source-file order):
 * ``test_gpu_cuda_preflight_1903.py`` -- CUDA preflight in
   ``_read_geotiff_gpu``.
 * ``test_gpu_kwarg_rename_1560.py`` -- ``gpu=`` -> ``on_gpu_failure=``
-  rename with deprecation shim.
-* ``test_gpu_strict_fallback_1516.py`` -- ``gpu='auto'`` warns +
-  fallbacks; ``gpu='strict'`` re-raises.
+  rename; the old spelling is rejected.
+* ``test_gpu_strict_fallback_1516.py`` -- ``on_gpu_failure='auto'``
+  warns + falls back; ``'strict'`` re-raises.
 * ``test_gpu_fallback_forwards_kwargs_2238.py`` -- CPU-fallback sites
   in ``_read_geotiff_gpu`` forward caller kwargs.
 * ``test_kvikio_batched_pread_1688.py`` -- single-allocation batched
@@ -212,108 +212,16 @@ def test_on_gpu_failure_invalid_value_raises_value_error_1560():
         _read_geotiff_gpu("/nonexistent.tif", on_gpu_failure='loose')
 
 
-def test_gpu_alias_emits_deprecation_warning_1560():
-    """Old ``gpu=`` kwarg still routes through, with a DeprecationWarning."""
+def test_gpu_string_kwarg_removed_1560():
+    """The 0.x ``gpu='auto' / 'strict'`` spelling is gone in 1.0."""
     from xrspatial.geotiff import _read_geotiff_gpu
 
-    with warnings.catch_warnings(record=True) as records:
-        warnings.simplefilter("always")
-        # Pass an invalid sentinel so we don't have to mock the full GPU
-        # pipeline; ValueError fires after the deprecation handler runs.
-        with pytest.raises(ValueError, match="on_gpu_failure must be"):
-            _read_geotiff_gpu("/nonexistent.tif", gpu='loose')
-
-    deprecations = [
-        r for r in records if issubclass(r.category, DeprecationWarning)
-    ]
-    assert deprecations, "expected DeprecationWarning when gpu= is used"
-    assert "on_gpu_failure" in str(deprecations[0].message)
-
-
-def test_gpu_alias_accepts_old_values_without_validation_error_1560(
-        monkeypatch):
-    """``gpu='strict'`` was the legacy spelling; should still validate.
-
-    Stub ``cupy`` with a working preflight so the test exercises the
-    alias-validation path on every host, including ones where CuPy
-    imports but the CUDA runtime is unusable (issue #2515). Without the
-    stub, the real ``_preflight_cuda_runtime`` raises ``RuntimeError``
-    on broken-CUDA hosts and the test fails for an environmental
-    reason that has nothing to do with the alias logic under test.
-    """
-    from xrspatial.geotiff import _read_geotiff_gpu
-
-    # Install a stub cupy whose preflight passes; the call should then
-    # reach the file-read stage and raise ``FileNotFoundError``. This
-    # decouples the alias-validation check from real CUDA state.
-    _install_cupy_stub_1903(monkeypatch, get_device_count=lambda: 1)
-
-    with warnings.catch_warnings():
-        # Suppress the deprecation noise; we only care that the value
-        # passes validation and the call proceeds past the value check.
-        warnings.simplefilter("ignore", DeprecationWarning)
-        with pytest.raises(
-                (FileNotFoundError, OSError, ValueError)
-        ) as exc_info:
-            _read_geotiff_gpu("/nonexistent.tif", gpu='strict')
-
-    # The validation ValueError carries our exact message; a generic
-    # file-read failure is fine because it means validation passed.
-    if isinstance(exc_info.value, ValueError):
-        assert "on_gpu_failure must be" not in str(exc_info.value)
-
-
-def test_passing_both_raises_type_error_1560():
-    """Mixing the new and deprecated names is ambiguous; refuse."""
-    from xrspatial.geotiff import _read_geotiff_gpu
-
-    with pytest.raises(TypeError, match="pass either 'on_gpu_failure' or"):
-        _read_geotiff_gpu(
-            "/nonexistent.tif",
-            on_gpu_failure='strict',
-            gpu='auto',
-        )
-
-
-@pytest.mark.parametrize("on_gpu_failure_val,gpu_val", [
-    ('auto', 'strict'),
-    ('auto', 'auto'),
-    ('strict', 'strict'),
-])
-def test_passing_both_raises_regardless_of_values_1560(
-        on_gpu_failure_val, gpu_val):
-    """Both-supplied is rejected even when ``on_gpu_failure='auto'``.
-
-    A sentinel-based detection (rather than ``!= 'auto'``) catches the
-    case where the caller passes the default value explicitly alongside
-    the deprecated alias.
-    """
-    from xrspatial.geotiff import _read_geotiff_gpu
-
-    with pytest.raises(TypeError, match="pass either 'on_gpu_failure' or"):
-        _read_geotiff_gpu(
-            "/nonexistent.tif",
-            on_gpu_failure=on_gpu_failure_val,
-            gpu=gpu_val,
-        )
-
-
-def test_gpu_alias_bool_no_longer_misleading_value_error_1560():
-    """Calling with ``gpu=True`` -- the documented bool from the
-    dispatchers -- used to raise ``ValueError: gpu must be 'auto' or
-    'strict', got True``. The new error explicitly names
-    ``on_gpu_failure`` so the rename is discoverable from the traceback.
-    """
-    from xrspatial.geotiff import _read_geotiff_gpu
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        with pytest.raises(ValueError, match="on_gpu_failure must be"):
-            _read_geotiff_gpu("/nonexistent.tif", gpu=True)
+    with pytest.raises(TypeError, match="unexpected keyword argument 'gpu'"):
+        _read_geotiff_gpu("/nonexistent.tif", gpu='strict')
 
 
 # =====================================================================
-# Section 1516 -- ``gpu='auto'`` warns + falls back; ``'strict'`` raises
+# Section 1516 -- ``on_gpu_failure='auto'`` warns + falls back; ``'strict'`` raises
 # =====================================================================
 #
 # ``_read_geotiff_gpu`` previously wrapped the GPU decode in a too-broad
@@ -323,10 +231,10 @@ def test_gpu_alias_bool_no_longer_misleading_value_error_1560():
 # was still numerically correct.
 #
 # The fix:
-# 1. Default ``gpu='auto'`` still falls back to CPU, but emits a
+# 1. Default ``on_gpu_failure='auto'`` still falls back to CPU, but emits a
 #    ``RuntimeWarning`` reporting the original exception type and
 #    message so failures are visible.
-# 2. New ``gpu='strict'`` mode re-raises instead of falling back, so
+# 2. ``on_gpu_failure='strict'`` re-raises instead of falling back, so
 #    tests and CI for the GPU fast path see real errors.
 #
 # These tests monkeypatch ``gpu_decode_tiles_from_file`` to raise a
@@ -466,7 +374,7 @@ def _patch_both_gpu_stages_to_raise_1516(monkeypatch, exc):
 
 
 def test_default_mode_warns_on_gpu_failure_1516(tiled_tiff_path_1516, monkeypatch):
-    """Default ``gpu='auto'`` warns and falls back to the CPU result."""
+    """Default ``on_gpu_failure='auto'`` warns and falls back to the CPU result."""
     inserted_stub = _ensure_cupy_stub_1516()
     try:
         from xrspatial.geotiff import _read_geotiff_gpu
@@ -492,7 +400,7 @@ def test_default_mode_warns_on_gpu_failure_1516(tiled_tiff_path_1516, monkeypatc
 
 
 def test_strict_mode_reraises_1516(tiled_tiff_path_1516, monkeypatch):
-    """``gpu='strict'`` re-raises the original GPU exception."""
+    """``on_gpu_failure='strict'`` re-raises the original GPU exception."""
     inserted_stub = _ensure_cupy_stub_1516()
     try:
         from xrspatial.geotiff import _read_geotiff_gpu
@@ -503,7 +411,7 @@ def test_strict_mode_reraises_1516(tiled_tiff_path_1516, monkeypatch):
         _patch_gpu_decode_to_raise_1516(monkeypatch, synthetic)
 
         with pytest.raises(RuntimeError, match="simulated GPU failure"):
-            _read_geotiff_gpu(path, gpu='strict')
+            _read_geotiff_gpu(path, on_gpu_failure='strict')
     finally:
         if inserted_stub:
             _restore_cupy_1516()
@@ -511,7 +419,7 @@ def test_strict_mode_reraises_1516(tiled_tiff_path_1516, monkeypatch):
 
 def test_strict_mode_reraises_second_stage_1516(
         tiled_tiff_path_1516, monkeypatch):
-    """``gpu='strict'`` re-raises if the second-stage GPU decode fails too.
+    """``on_gpu_failure='strict'`` re-raises if the second-stage GPU decode fails too.
 
     Regression for the case where ``gpu_decode_tiles_from_file`` and the
     follow-up ``gpu_decode_tiles`` both fail. Previously the second
@@ -529,7 +437,7 @@ def test_strict_mode_reraises_second_stage_1516(
 
         with pytest.raises(RuntimeError,
                            match="simulated second-stage GPU failure"):
-            _read_geotiff_gpu(path, gpu='strict')
+            _read_geotiff_gpu(path, on_gpu_failure='strict')
     finally:
         if inserted_stub:
             _restore_cupy_1516()
@@ -537,7 +445,7 @@ def test_strict_mode_reraises_second_stage_1516(
 
 def test_default_mode_warns_on_second_stage_failure_1516(
         tiled_tiff_path_1516, monkeypatch):
-    """``gpu='auto'`` warns once per stage failure and falls back to CPU.
+    """``on_gpu_failure='auto'`` warns once per stage failure and falls back to CPU.
 
     Both GPU decode stages are forced to raise, so the user sees two
     distinct ``RuntimeWarning`` records (one per stage) before the CPU
@@ -584,14 +492,9 @@ def test_invalid_gpu_kwarg_rejected_1516(tiled_tiff_path_1516):
 
         path, _ = tiled_tiff_path_1516
 
-        # The kwarg was renamed to ``on_gpu_failure``; the
-        # validation error now names the new kwarg even when callers
-        # supply the deprecated ``gpu=`` alias.
         with pytest.raises(ValueError,
                            match="on_gpu_failure must be 'auto' or 'strict'"):
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", DeprecationWarning)
-                _read_geotiff_gpu(path, gpu='loose')
+            _read_geotiff_gpu(path, on_gpu_failure='loose')
     finally:
         if inserted_stub:
             _restore_cupy_1516()
