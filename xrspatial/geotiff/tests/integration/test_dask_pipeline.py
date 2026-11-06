@@ -1019,7 +1019,7 @@ class TestDatasetOpenGeotiff_accessor_io:
             ds.xrs.open_geotiff(path)
 
     def test_kwargs_forwarded(self, tmp_path):
-        """Extra kwargs like name= should be forwarded to open_geotiff."""
+        """Extra kwargs like default_name= should be forwarded to open_geotiff."""
         da = _make_da_accessor_io(height=8, width=10)
         path = str(tmp_path / 'test_1047_kwargs.tif')
         to_geotiff(da, path, compression='none')
@@ -1032,7 +1032,7 @@ class TestDatasetOpenGeotiff_accessor_io:
                         'x': da.coords['x'].values},
             )
         })
-        result = template.xrs.open_geotiff(path, name='myname')
+        result = template.xrs.open_geotiff(path, default_name='myname')
         assert result.name == 'myname'
 
 
@@ -1082,7 +1082,7 @@ class TestDataArrayOpenGeotiff_2557:
                     'x': da.coords['x'].values},
             attrs={'crs': 4326},
         )
-        result = template.xrs.open_geotiff(path, name='myname')
+        result = template.xrs.open_geotiff(path, default_name='myname')
         assert result.name == 'myname'
 
 

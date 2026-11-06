@@ -2626,27 +2626,6 @@ class TestPalette:
         import matplotlib.pyplot as plt
         plt.close('all')
 
-    def test_plot_geotiff_deprecated(self, tmp_path):
-        """plot_geotiff still works but emits a DeprecationWarning."""
-        import matplotlib
-        matplotlib.use('Agg')
-        import xrspatial.accessor  # noqa: F401
-        from xrspatial.geotiff import plot_geotiff
-
-        palette = [(65535, 0, 0), (0, 65535, 0)] + [(0, 0, 0)] * 254
-        pixels = np.array([[0, 1], [1, 0]], dtype=np.uint8)
-        tiff_data = _make_palette_tiff(2, 2, 8, pixels, palette)
-        path = str(tmp_path / 'deprecated.tif')
-        with open(path, 'wb') as f:
-            f.write(tiff_data)
-
-        da = open_geotiff(path)
-        with pytest.warns(DeprecationWarning, match='plot_geotiff is deprecated'):
-            artist = plot_geotiff(da)
-        assert artist is not None
-        import matplotlib.pyplot as plt
-        plt.close('all')
-
     def test_non_palette_no_cmap(self, tmp_path):
         """Non-palette TIFFs should not have any colormap attr.
 
@@ -2911,12 +2890,12 @@ class TestPublicAPI:
         for name in g.__all__:
             assert name in ns, f"{name} listed in __all__ but not exported"
 
-    def test_plot_geotiff_not_in_all_but_still_importable(self):
-        # plot_geotiff is intentionally omitted from __all__ (deprecated)
-        # but stays importable so existing user code keeps working.
+    def test_plot_geotiff_removed(self):
+        # The deprecated plot_geotiff wrapper was removed in 1.0; the
+        # replacement is da.xrs.plot().
         import xrspatial.geotiff as g
         assert 'plot_geotiff' not in g.__all__
-        assert hasattr(g, 'plot_geotiff')
+        assert not hasattr(g, 'plot_geotiff')
 
 
 # ===========================================================================

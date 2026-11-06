@@ -138,20 +138,11 @@ def test_masked_true_promotes_and_masks(tmp_path):
     assert out.attrs.get("masked_nodata") is True
 
 
-def test_mask_nodata_alias_warns_and_matches(tmp_path):
+def test_mask_nodata_removed(tmp_path):
+    """The 0.x ``mask_nodata=`` alias is gone in 1.0; use ``masked=``."""
     path = _int_sentinel_tiff(str(tmp_path / "t2961_alias.tif"))
-    with pytest.warns(DeprecationWarning, match="mask_nodata.*deprecated"):
-        legacy = open_geotiff(path, mask_nodata=True)
-    canonical = open_geotiff(path, masked=True)
-    np.testing.assert_array_equal(
-        np.isnan(legacy.data), np.isnan(canonical.data))
-    assert legacy.dtype == canonical.dtype == np.float64
-
-
-def test_masked_and_mask_nodata_both_raises(tmp_path):
-    path = _int_sentinel_tiff(str(tmp_path / "t2961_both.tif"))
-    with pytest.raises(TypeError, match="either 'masked' or"):
-        open_geotiff(path, masked=True, mask_nodata=True)
+    with pytest.raises(TypeError, match="mask_nodata"):
+        open_geotiff(path, mask_nodata=True)
 
 
 def test_canonical_masked_false_emits_no_warning(tmp_path, recwarn):
@@ -162,7 +153,7 @@ def test_canonical_masked_false_emits_no_warning(tmp_path, recwarn):
 
 
 # ---------------------------------------------------------------------------
-# default_name / name deprecation alias
+# default_name (the 0.x ``name=`` alias was removed in 1.0)
 # ---------------------------------------------------------------------------
 
 def test_default_name_sets_array_name(tmp_path):
@@ -171,38 +162,21 @@ def test_default_name_sets_array_name(tmp_path):
     assert out.name == "elevation"
 
 
-def test_name_alias_warns_and_matches(tmp_path):
+def test_name_removed(tmp_path):
     path = _int_sentinel_tiff(str(tmp_path / "t2961_name_alias.tif"))
-    with pytest.warns(DeprecationWarning, match="name.*deprecated"):
-        out = open_geotiff(path, name="elevation")
-    assert out.name == "elevation"
-
-
-def test_default_name_and_name_both_raises(tmp_path):
-    path = _int_sentinel_tiff(str(tmp_path / "t2961_name_both.tif"))
-    with pytest.raises(TypeError, match="either 'default_name' or"):
-        open_geotiff(path, default_name="a", name="b")
+    with pytest.raises(TypeError, match="name"):
+        open_geotiff(path, name="elevation")
 
 
 # ---------------------------------------------------------------------------
 # unpack (renamed from mask_and_scale)
 # ---------------------------------------------------------------------------
 
-def test_mask_and_scale_alias_warns_and_matches(tmp_path):
-    """The deprecated ``mask_and_scale`` alias warns and matches ``unpack``."""
+def test_mask_and_scale_removed(tmp_path):
+    """The 0.x ``mask_and_scale=`` alias is gone in 1.0; use ``unpack=``."""
     path = _scale_offset_tiff(str(tmp_path / "t3071_ms_alias.tif"))
-    with pytest.warns(DeprecationWarning, match="mask_and_scale.*deprecated"):
-        legacy = open_geotiff(path, mask_and_scale=True)
-    canonical = open_geotiff(path, unpack=True)
-    np.testing.assert_array_equal(legacy.data, canonical.data)
-    assert legacy.attrs.get("scale_factor") == canonical.attrs.get(
-        "scale_factor") == 2.0
-
-
-def test_unpack_and_mask_and_scale_both_raises(tmp_path):
-    path = _scale_offset_tiff(str(tmp_path / "t3071_ms_both.tif"))
-    with pytest.raises(TypeError, match="either 'unpack' or"):
-        open_geotiff(path, unpack=True, mask_and_scale=True)
+    with pytest.raises(TypeError, match="mask_and_scale"):
+        open_geotiff(path, mask_and_scale=True)
 
 
 def test_unpack_false_emits_no_warning(tmp_path, recwarn):

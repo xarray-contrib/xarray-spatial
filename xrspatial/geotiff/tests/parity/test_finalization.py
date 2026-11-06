@@ -15,7 +15,7 @@ Section 1 -- Dispatcher kwarg parity
 Section 2 -- Eager finalization parity
     ``_finalize_eager_read`` stamps the same nodata / georef attrs on the
     eager numpy and eager GPU paths. The matrix walks float / int /
-    out-of-range sentinels, ``mask_nodata=False``, no-sentinel,
+    out-of-range sentinels, ``masked=False``, no-sentinel,
     explicit ``dtype=``, windowed reads, MinIsWhite, and multi-band.
 
 Section 3 -- Lazy finalization parity
@@ -636,13 +636,13 @@ def test_int_out_of_range_sentinel_is_no_op(tmp_path):
 
 @requires_gpu
 def test_mask_nodata_false_keeps_literal_sentinel(tmp_path):
-    """mask_nodata=False leaves the buffer untouched on both backends."""
+    """masked=False leaves the buffer untouched on both backends."""
     arr = np.array(
         [[1.0, 2.0, -9999.0], [4.0, -9999.0, 6.0]], dtype=np.float32)
     path = str(tmp_path / 'eager_parity_2179_mask_false.tif')
     _write_with_nodata(arr, path, nodata=-9999.0)
 
-    cpu, gpu = _read_both(path, mask_nodata=False)
+    cpu, gpu = _read_both(path, masked=False)
 
     # No NaN substitution; the literal sentinel survives on both
     # backends with ``masked_nodata=False``.

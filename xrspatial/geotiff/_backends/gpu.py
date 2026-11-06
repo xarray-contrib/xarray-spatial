@@ -17,8 +17,8 @@ from .._coords import coords_from_geo_info as _coords_from_geo_info
 from .._nodata import NodataLifecycle as _NL
 from .._reader import _MAX_CLOUD_BYTES_SENTINEL, CloudSizeLimitError, _coerce_path
 from .._reader import read_to_array as _read_to_array
-from .._runtime import (_GPU_DEPRECATED_SENTINEL, _MISSING_SOURCES_SENTINEL,
-                        _ON_GPU_FAILURE_SENTINEL, _geotiff_strict_mode)
+from .._runtime import (_MISSING_SOURCES_SENTINEL, _ON_GPU_FAILURE_SENTINEL,
+                        _geotiff_strict_mode)
 from .._validation import (_validate_chunks_arg, _validate_dispatch_kwargs, _validate_dtype_cast,
                            _validate_predictor_sample_format)
 from ._gpu_helpers import (_apply_nodata_mask_gpu, _apply_orientation_geo_info,
@@ -74,7 +74,6 @@ def _read_geotiff_gpu(source: str, *,
                       band_nodata: str | None = None,
                       mask_nodata: bool = False,
                       mask_and_scale: bool = False,
-                      gpu: str = _GPU_DEPRECATED_SENTINEL,
                       ) -> xr.DataArray:
     """Read a GeoTIFF with GPU-accelerated decompression via Numba CUDA.
 
@@ -174,13 +173,6 @@ def _read_geotiff_gpu(source: str, *,
         is unusable; transient errors inside a later
         ``cupy.asarray(...)`` upload (e.g. device OOM) still propagate
         unchanged in both modes.
-    gpu : str, optional
-        [experimental] Deprecated alias for ``on_gpu_failure``. Emits
-        ``DeprecationWarning`` when used. Passing both ``gpu`` and
-        ``on_gpu_failure`` raises ``TypeError``. The old name shipped
-        with values ``'auto'`` / ``'strict'`` and was easy to confuse
-        with the boolean ``gpu=`` kwarg on ``open_geotiff`` /
-        ``to_geotiff`` / ``_read_vrt``.
     mask_nodata : bool, default False
         [experimental] If True, replace the nodata sentinel with NaN
         (integer rasters get promoted to ``float64`` first). If False,
@@ -303,28 +295,9 @@ def _read_geotiff_gpu(source: str, *,
         allow_experimental_codecs=allow_experimental_codecs,
     )
 
-    new_passed = on_gpu_failure is not _ON_GPU_FAILURE_SENTINEL
-    old_passed = gpu is not _GPU_DEPRECATED_SENTINEL
-    if new_passed and old_passed:
-        # Both supplied is ambiguous regardless of which values were
-        # chosen (including the matching ``on_gpu_failure='auto',
-        # gpu='auto'`` pair). Refuse rather than silently picking one.
-        raise TypeError(
-            "_read_geotiff_gpu: pass either 'on_gpu_failure' or the "
-            "deprecated 'gpu' alias, not both.")
-    if old_passed:
-        warnings.warn(
-            "_read_geotiff_gpu(..., gpu=...) is deprecated; use "
-            "on_gpu_failure=... instead. The kwarg was renamed because "
-            "'gpu' on open_geotiff/to_geotiff/_read_vrt is a bool that "
-            "selects the GPU backend, while here it selects the failure "
-            "policy when the GPU path raises.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        on_gpu_failure = gpu
-    elif not new_passed:
+    if on_gpu_failure is _ON_GPU_FAILURE_SENTINEL:
         on_gpu_failure = 'auto'
+    # The failure policy is read below through the ``gpu`` local.
     gpu = on_gpu_failure
     if gpu not in ('auto', 'strict'):
         raise ValueError(
@@ -1111,7 +1084,7 @@ def _read_geotiff_gpu_eager_via_cpu(source, *, dtype, window, overview_level,
     return. This helper is the eager analogue: read the
     whole array on CPU, push it to the device in one shot.
 
-    The user-facing ``on_gpu_failure`` / ``gpu='strict'`` kwarg is a
+    The user-facing ``on_gpu_failure='strict'`` kwarg is a
     no-op on this path. There is no GPU decode stage to be strict
     about: the only GPU operation is the ``cupy.asarray`` upload, and
     upload failures (e.g. device OOM) already propagate unconditionally.

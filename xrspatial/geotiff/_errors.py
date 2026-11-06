@@ -219,7 +219,7 @@ class InvalidIntegerNodataError(GeoTIFFAmbiguousMetadataError):
 class MalformedScaleOffsetError(GeoTIFFAmbiguousMetadataError):
     """A present SCALE / OFFSET item cannot be parsed as a float.
 
-    Raised under ``mask_and_scale=True`` when the source's GDAL_METADATA
+    Raised under ``unpack=True`` when the source's GDAL_METADATA
     carries a ``SCALE`` or ``OFFSET`` item whose value does not parse as
     a float (for example ``SCALE="abc"``). ``mask_and_scale`` asks the
     reader to honour the scale / offset metadata, so a malformed value
