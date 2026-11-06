@@ -22,11 +22,11 @@ Removed aliases
    * - Removed in 1.0.0
      - Use instead
      - Deprecated since
-   * - ``xrspatial.basins`` / ``xrspatial.hydro.basins`` / ``basins_d8``
-     - ``basin`` / ``basin_d8``
+   * - ``xrspatial.basins`` / ``xrspatial.hydro.basins`` / ``basins_d8`` / ``.xrs.basins()``
+     - ``basin`` / ``basin_d8`` / ``.xrs.basin()``
      - 0.10.2
-   * - ``crop(zones_ids=...)``
-     - ``crop(zone_ids=...)``
+   * - ``crop(zones_ids=...)`` and ``.xrs.crop(zones, zones_ids=...)``
+     - ``crop(zone_ids=...)`` / ``.xrs.crop(zones, zone_ids=...)``
      - 0.10.1
    * - ``focal.apply(raster=...)`` and ``hotspots(raster=...)``
      - ``agg=``
