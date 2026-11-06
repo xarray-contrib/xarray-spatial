@@ -253,7 +253,7 @@ def wpm(
 def owa(
     criteria: xr.Dataset,
     weights: dict[str, float],
-    order_weights: list[float] | None = None,
+    order_weights: list[float],
     name: str = "owa",
 ) -> xr.DataArray:
     """Ordered Weighted Averaging.
@@ -281,9 +281,6 @@ def owa(
     xr.DataArray
         Composite suitability surface.
     """
-    if order_weights is None:
-        raise TypeError("owa() missing required argument: 'order_weights'")
-
     _validate_criteria(criteria)
     _validate_weights(weights, criteria)
 
