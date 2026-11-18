@@ -921,6 +921,44 @@ def test_geodesic_basic():
         assert 100000 < sd[pos] < 130000  # roughly 100-130 km
 
 
+def test_geodesic_direction_initial_bearing_at_high_latitude():
+    """Compare the direction to the initial bearing on a sphere."""
+    source = np.zeros((3, 3))
+    source[0, 2] = 1
+    raster = xr.DataArray(
+        source, dims=['y', 'x'],
+        coords={'y': [61., 60., 59.], 'x': [-1., 0., 1.]},
+    )
+    elevation = xr.zeros_like(raster)
+
+    result = surface_direction(raster, elevation, method='geodesic')
+
+    # Initial spherical bearing from (0 E, 60 N) to (1 E, 61 N).
+    assert result.values[1, 1] == pytest.approx(25.78, abs=0.01)
+    assert result.values[1, 2] == 360  # due north
+    assert result.values[0, 2] == 0  # the target itself
+
+
+def test_geodesic_direction_uses_curvilinear_coordinates():
+    """Use geographic coordinates even when they disagree with grid indices."""
+    raster = xr.DataArray(
+        [[0, 0], [0, 1]], dims=['y', 'x'],
+        coords={
+            'y': [0, 1], 'x': [0, 1],
+            'latitude': (('y', 'x'), [[1., 2.], [0., 0.]]),
+            'longitude': (('y', 'x'), [[179., -179.], [-179., 179.]]),
+        },
+    )
+    elevation = xr.zeros_like(raster)
+    result = surface_direction(
+        raster, elevation, method='geodesic', max_distance=250_000,
+    )
+
+    # The target is to the west across the antimeridian, despite its column.
+    assert result.values[1, 0] == pytest.approx(270)
+    assert np.isnan(result.values[0, 1])  # beyond the distance cutoff
+
+
 # ---------------------------------------------------------------------------
 # Metadata propagation (issue #3708)
 # ---------------------------------------------------------------------------

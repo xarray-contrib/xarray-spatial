@@ -446,6 +446,32 @@ def _finalize_direction(src_row, src_col, dist, cellsize_x, cellsize_y,
     return result
 
 
+@ngjit
+def _finalize_geodesic_direction(src_row, src_col, dist, lat, lon, max_distance):
+    """Compute initial spherical bearings to the targets selected by Dijkstra."""
+    height, width = dist.shape
+    result = np.full((height, width), np.nan, dtype=np.float32)
+    for row in range(height):
+        for col in range(width):
+            if not np.isfinite(dist[row, col]) or dist[row, col] > max_distance:
+                continue
+            target_row, target_col = src_row[row, col], src_col[row, col]
+            if row == target_row and col == target_col:
+                result[row, col] = 0
+                continue
+
+            start_lat = _math.radians(lat[row, col])
+            target_lat = _math.radians(lat[target_row, target_col])
+            delta_lon = _math.radians(lon[target_row, target_col] - lon[row, col])
+            east = _math.sin(delta_lon) * _math.cos(target_lat)
+            north = (_math.cos(start_lat) * _math.sin(target_lat)
+                     - _math.sin(start_lat) * _math.cos(target_lat)
+                     * _math.cos(delta_lon))
+            bearing = _math.degrees(_math.atan2(east, north)) % 360
+            result[row, col] = 360 if bearing == 0 else bearing
+    return result
+
+
 def _extract_output(dist, alloc, src_row, src_col,
                     cellsize_x, cellsize_y, max_distance, mode):
     """Select and finalize the requested output from raw Dijkstra arrays."""
@@ -524,7 +550,7 @@ def _precompute_dd_grid(lat_2d, lon_2d, dy, dx):
 
 def _surface_distance_numpy(source_data, elev_data, cellsize_x, cellsize_y,
                             max_distance, target_values, dy, dx, dd,
-                            dd_grid, use_geodesic, mode):
+                            dd_grid, geodesic_coords, mode):
     """NumPy backend: run Dijkstra and extract requested output."""
     H, W = source_data.shape
     _check_memory(H, W)
@@ -533,9 +559,14 @@ def _surface_distance_numpy(source_data, elev_data, cellsize_x, cellsize_y,
     _seed_sources(source_data, elev_data, target_values,
                   dist, alloc, src_row, src_col)
 
-    if use_geodesic:
+    if geodesic_coords is not None:
         _dijkstra_geodesic(elev_data, H, W, max_distance,
                            dy, dx, dd_grid, dist, alloc, src_row, src_col)
+        if mode == DIRECTION:
+            lat, lon = geodesic_coords
+            return _finalize_geodesic_direction(
+                src_row, src_col, dist, lat, lon, max_distance,
+            )
     else:
         _dijkstra(elev_data, H, W, max_distance,
                   dy, dx, dd, dist, alloc, src_row, src_col)
@@ -719,7 +750,7 @@ def _make_sd_chunk_func(cellsize_x, cellsize_y, max_distance,
             source_block, elev_block,
             cellsize_x, cellsize_y, max_distance,
             target_values, dy, dx, dd,
-            None, False, mode,
+            None, None, mode,
         )
 
     return _chunk
@@ -1465,9 +1496,11 @@ def _compute(raster, elevation, x, y, target_values, max_distance,
     # Geodesic dd_grid precomputation (numpy only for now)
     use_geodesic = (method == 'geodesic')
     dd_grid = None
+    geodesic_coords = None
     if use_geodesic:
         from xrspatial.utils import _extract_latlon_coords
-        lat_2d, lon_2d = _extract_latlon_coords(raster)
+        geodesic_coords = _extract_latlon_coords(raster)
+        lat_2d, lon_2d = geodesic_coords
         dd_grid = _precompute_dd_grid(lat_2d, lon_2d, dy_arr, dx_arr)
 
     source_data = raster.data
@@ -1510,14 +1543,14 @@ def _compute(raster, elevation, x, y, target_values, max_distance,
             result_data = _surface_distance_numpy(
                 source_data, elev_data, signed_cellsize_x, signed_cellsize_y,
                 max_distance_f, target_values, dy_arr, dx_arr, dd_arr,
-                dd_grid, use_geodesic, mode,
+                dd_grid, geodesic_coords, mode,
             )
         else:
             elev_np = np.asarray(elev_data)
             result_data = _surface_distance_numpy(
                 source_data, elev_np, signed_cellsize_x, signed_cellsize_y,
                 max_distance_f, target_values, dy_arr, dx_arr, dd_arr,
-                dd_grid, use_geodesic, mode,
+                dd_grid, geodesic_coords, mode,
             )
     elif _is_dask:
         if use_geodesic:
@@ -1666,6 +1699,10 @@ def surface_direction(
     For each pixel, returns the compass direction (in degrees) to the
     nearest target pixel by surface distance.  0 = source pixel,
     90 = east, 180 = south, 270 = west, 360 = north.
+
+    With ``method='geodesic'``, the result is the initial great-circle
+    bearing from the pixel to its target, based on their latitude and
+    longitude. It is available for NumPy-backed rasters.
 
     Parameters
     ----------
