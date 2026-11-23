@@ -1109,13 +1109,11 @@ def test_natural_breaks_positional_k_matches_siblings():
     np.testing.assert_array_equal(positional.data, keyword.data)
 
 
-def test_natural_breaks_legacy_positional_num_sample_warns():
-    """Legacy (agg, num_sample, k=...) order warns and still maps correctly."""
+def test_natural_breaks_legacy_positional_num_sample_removed():
+    """The pre-1.0 (agg, num_sample, k=...) remap is gone (#3762)."""
     agg = input_data()
-    with pytest.warns(DeprecationWarning):
-        legacy = natural_breaks(agg, 20000, k=3)
-    new = natural_breaks(agg, k=3, num_sample=20000)
-    np.testing.assert_array_equal(legacy.data, new.data)
+    with pytest.raises(TypeError, match="k"):
+        natural_breaks(agg, 20000, k=3)
 
 
 # ===================================================================

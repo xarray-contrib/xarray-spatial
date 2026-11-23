@@ -2871,7 +2871,6 @@ def crop(
     name: str = "crop",
     column: Optional[str] = None,
     rasterize_kw: Optional[dict] = None,
-    zones_ids: Optional[Union[list, tuple]] = None,
 ):
     """
     Crop scans from edges and eliminates rows / cols until one of the
@@ -2900,10 +2899,6 @@ def crop(
     rasterize_kw : dict, optional
         Extra keyword arguments forwarded to ``rasterize()`` when
         *zones* is vector input.
-
-    zones_ids : list or tuple, optional
-        Deprecated alias for ``zone_ids``.  Will emit a
-        ``DeprecationWarning`` and be removed in a future release.
 
     Returns
     -------
@@ -3009,25 +3004,6 @@ def crop(
             'Max Elevation': '4000',
         }
     """
-    # Backwards-compatible alias: stats() and crosstab() use `zone_ids`,
-    # crop() historically used `zones_ids` (extra 's').  Accept both,
-    # emit a DeprecationWarning on the old name, raise if both are passed.
-    if zones_ids is not None:
-        import warnings
-        if zone_ids is not None:
-            raise TypeError(
-                "crop() received both `zone_ids` and `zones_ids`; pass "
-                "only `zone_ids` (the canonical name)."
-            )
-        warnings.warn(
-            "crop(zones_ids=...) is deprecated and will be removed in a "
-            "future release; use `zone_ids=...` to match stats() and "
-            "crosstab().",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        zone_ids = zones_ids
-
     if zone_ids is None:
         raise TypeError(
             "crop() missing required argument `zone_ids` (list or tuple "

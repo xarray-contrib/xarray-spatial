@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import cmath
-import functools
 import warnings
 from functools import partial
 from typing import List, Optional
@@ -803,35 +802,7 @@ def _run_dask_cupy_natural_break(agg, num_sample, k):
     return out
 
 
-def _natural_breaks_legacy_order(func):
-    """Bridge the pre-1.0 ``natural_breaks`` parameter order.
-
-    The old signature was ``(agg, num_sample, name, k)``. The new order is
-    ``(agg, k, num_sample, name)`` to match ``quantile`` and
-    ``maximum_breaks``. Legacy callers always passed ``k`` as a keyword
-    (it was the last parameter), so a call that supplies ``k=`` together
-    with a second positional argument is using the old order: that
-    positional is the old ``num_sample``. Remap it and warn.
-    """
-    @functools.wraps(func)
-    def wrapper(agg, *args, **kwargs):
-        if 'k' in kwargs and len(args) >= 1 and 'num_sample' not in kwargs:
-            warnings.warn(
-                "natural_breaks parameter order changed to "
-                "(agg, k, num_sample, name) to match the other "
-                "classifiers. Passing num_sample positionally is "
-                "deprecated; pass num_sample=... instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            kwargs['num_sample'] = args[0]
-            args = args[1:]
-        return func(agg, *args, **kwargs)
-    return wrapper
-
-
 @supports_dataset
-@_natural_breaks_legacy_order
 def natural_breaks(agg: xr.DataArray,
                    k: int = 5,
                    num_sample: Optional[int] = 20000,

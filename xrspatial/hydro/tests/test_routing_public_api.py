@@ -26,7 +26,7 @@ SUFFIXED = [
     'flow_accumulation_d8', 'flow_accumulation_dinf', 'flow_accumulation_mfd',
     'flow_length_d8', 'flow_path_mfd', 'watershed_dinf', 'hand_mfd',
     'stream_link_d8', 'stream_order_dinf',
-    'basin_d8', 'basins_d8', 'sink_d8', 'snap_pour_point_d8', 'fill_d8',
+    'basin_d8', 'sink_d8', 'snap_pour_point_d8', 'fill_d8',
     'twi_d8',
 ]
 
