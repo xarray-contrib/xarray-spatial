@@ -1,4 +1,4 @@
-from xrspatial._numpy_floor import _check_numpy_version  # noqa: F401
+from xrspatial import _numpy_floor  # noqa: F401  — raises on NumPy 1.x before any submodule loads
 from xrspatial.aspect import aspect  # noqa
 from xrspatial.aspect import eastness  # noqa
 from xrspatial.aspect import northness  # noqa
@@ -55,6 +55,9 @@ from xrspatial.hydro import flow_accumulation  # noqa: unified wrapper
 from xrspatial.hydro import flow_direction  # noqa: unified wrapper
 from xrspatial.hydro import flow_length  # noqa: unified wrapper
 from xrspatial.hydro import flow_path  # noqa: unified wrapper
+from xrspatial.focal import apply as focal_apply  # noqa
+from xrspatial.focal import focal_stats  # noqa
+from xrspatial.focal import hotspots  # noqa
 from xrspatial.focal import mean  # noqa
 from xrspatial.glcm import glcm_texture  # noqa
 from xrspatial.morphology import morph_black_tophat  # noqa
@@ -69,22 +72,28 @@ from xrspatial.hillshade import hillshade  # noqa
 from xrspatial.mahalanobis import mahalanobis  # noqa
 from xrspatial.multispectral import arvi  # noqa
 from xrspatial.multispectral import bai  # noqa
+from xrspatial.multispectral import ebbi  # noqa
 from xrspatial.multispectral import evi  # noqa
+from xrspatial.multispectral import gci  # noqa
 from xrspatial.multispectral import mndwi  # noqa
 from xrspatial.multispectral import msavi2  # noqa
 from xrspatial.multispectral import nbr  # noqa
+from xrspatial.multispectral import nbr2  # noqa
 from xrspatial.multispectral import ndbi  # noqa
+from xrspatial.multispectral import ndmi  # noqa
 from xrspatial.multispectral import ndsi  # noqa
 from xrspatial.multispectral import ndvi  # noqa
 from xrspatial.multispectral import ndwi  # noqa
 from xrspatial.multispectral import osavi  # noqa
 from xrspatial.multispectral import savi  # noqa
 from xrspatial.multispectral import sipi  # noqa
+from xrspatial.multispectral import true_color  # noqa
 from xrspatial.pathfinding import a_star_search  # noqa
 from xrspatial.pathfinding import multi_stop_search  # noqa
 from xrspatial.normalize import rescale  # noqa
 from xrspatial.normalize import standardize  # noqa
 from xrspatial.perlin import perlin  # noqa
+from xrspatial.worley import worley  # noqa
 from xrspatial.preview import preview  # noqa
 from xrspatial.proximity import allocation  # noqa
 from xrspatial.rasterize import rasterize  # noqa
@@ -121,7 +130,6 @@ from xrspatial.visibility import cumulative_viewshed  # noqa
 from xrspatial.visibility import line_of_sight  # noqa
 from xrspatial.visibility import visibility_frequency  # noqa
 from xrspatial.hydro import basin  # noqa: unified wrapper
-from xrspatial.hydro import basins  # noqa: backward-compat alias
 from xrspatial.hydro import watershed  # noqa: unified wrapper
 from xrspatial.zonal import apply as zonal_apply  # noqa
 from xrspatial.zonal import crop  # noqa
@@ -141,6 +149,161 @@ from xrspatial.utils import multi_overlap  # noqa
 
 import xrspatial.mcda  # noqa: F401  — exposes xrspatial.mcda subpackage
 import xrspatial.accessor  # noqa: F401  — registers .xrs accessors
+
+# The names below, plus the ``xrspatial.mcda`` subpackage and the ``.xrs``
+# accessor, are the 1.x LTS surface (docs/source/user_guide/stability_policy.rst).
+# xrspatial/tests/test_public_surface.py keeps this list and the README
+# feature matrix in step.
+__all__ = [
+    'a_star_search',
+    'allocation',
+    'arvi',
+    'aspect',
+    'bai',
+    'balanced_allocation',
+    'basin',
+    'bilateral',
+    'binary',
+    'box_plot',
+    'bump',
+    'burn_severity_class',
+    'clip_polygon',
+    'contours',
+    'cost_distance',
+    'crop',
+    'cumulative_viewshed',
+    'curvature',
+    'curve_number_runoff',
+    'diagnose',
+    'diffuse',
+    'direction',
+    'disaggregate',
+    'dnbr',
+    'eastness',
+    'ebbi',
+    'emerging_hotspots',
+    'equal_interval',
+    'erode',
+    'euclidean_distance',
+    'evi',
+    'fill',
+    'fireline_intensity',
+    'flame_length',
+    'flood_depth',
+    'flood_depth_vegetation',
+    'flow_accumulation',
+    'flow_direction',
+    'flow_length',
+    'flow_path',
+    'focal_apply',
+    'focal_stats',
+    'from_template',
+    'fused_overlap',
+    'gci',
+    'generate_terrain',
+    'glcm_texture',
+    'great_circle_distance',
+    'hand',
+    'head_tail_breaks',
+    'hillshade',
+    'hotspots',
+    'hypsometric_integral',
+    'idw',
+    'inundation',
+    'kbdi',
+    'kde',
+    'kriging',
+    'LANDFORM_CLASSES',
+    'landforms',
+    'laplacian',
+    'least_cost_corridor',
+    'line_density',
+    'line_of_sight',
+    'list_templates',
+    'mahalanobis',
+    'manhattan_distance',
+    'maximum_breaks',
+    'mcda',
+    'mean',
+    'merge',
+    'mndwi',
+    'morph_black_tophat',
+    'morph_closing',
+    'morph_dilate',
+    'morph_erode',
+    'morph_gradient',
+    'morph_opening',
+    'morph_white_tophat',
+    'msavi2',
+    'multi_overlap',
+    'multi_stop_search',
+    'natural_breaks',
+    'nbr',
+    'nbr2',
+    'ndbi',
+    'ndmi',
+    'ndsi',
+    'ndvi',
+    'ndwi',
+    'northness',
+    'open_geotiff',
+    'osavi',
+    'percentiles',
+    'perlin',
+    'polygonize',
+    'preview',
+    'prewitt_x',
+    'prewitt_y',
+    'proximity',
+    'pycnophylactic',
+    'quantile',
+    'rasterize',
+    'rate_of_spread',
+    'rdnbr',
+    'rechunk_no_shuffle',
+    'reclassify',
+    'regions',
+    'reproject',
+    'resample',
+    'rescale',
+    'roughness',
+    'savi',
+    'sieve',
+    'sink',
+    'sipi',
+    'sky_view_factor',
+    'slope',
+    'snap_pour_point',
+    'sobel_x',
+    'sobel_y',
+    'spline',
+    'standardize',
+    'std_mean',
+    'stream_link',
+    'stream_order',
+    'suggest_zonal_canvas',
+    'surface_allocation',
+    'surface_direction',
+    'surface_distance',
+    'to_geotiff',
+    'tpi',
+    'travel_time',
+    'tri',
+    'trim',
+    'true_color',
+    'twi',
+    'validate',
+    'validate_disaggregation',
+    'vegetation_curve_number',
+    'vegetation_roughness',
+    'viewshed',
+    'visibility_frequency',
+    'watershed',
+    'worley',
+    'zonal_apply',
+    'zonal_crosstab',
+    'zonal_stats',
+]
 
 
 try:

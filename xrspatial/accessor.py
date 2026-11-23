@@ -2379,7 +2379,9 @@ def _delegated_doc(method_name):
     """Return the docstring to surface for an accessor method, or None."""
     if method_name == 'min_observable_height':
         from .experimental.min_observable_height import min_observable_height
-        return min_observable_height.__doc__
+        return ('Experimental: not part of the 1.x LTS surface, and its '
+                'signature or output may change in a minor release.\n\n'
+                + (min_observable_height.__doc__ or ''))
     import xrspatial
     source_name = _DOC_SOURCE_OVERRIDES.get(method_name, method_name)
     func = getattr(xrspatial, source_name, None)
