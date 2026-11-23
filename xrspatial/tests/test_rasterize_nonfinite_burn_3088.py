@@ -132,7 +132,7 @@ def test_nan_burn_int_dtype_raises_cupy():
     with pytest.raises(ValueError, match="cannot be represented"):
         rasterize([(box(2, 2, 8, 8), float('nan'))],
                   width=10, height=10, bounds=(0, 0, 10, 10),
-                  fill=0, dtype=np.int32, use_cuda=True)
+                  fill=0, dtype=np.int32, gpu=True)
 
 
 @skip_no_shapely
@@ -143,7 +143,7 @@ def test_nan_burn_int_dtype_raises_dask_cupy():
     with pytest.raises(ValueError, match="cannot be represented"):
         rasterize([(box(2, 2, 8, 8), float('nan'))],
                   width=10, height=10, bounds=(0, 0, 10, 10),
-                  fill=0, dtype=np.int32, use_cuda=True, chunks=5)
+                  fill=0, dtype=np.int32, gpu=True, chunks=5)
 
 
 @skip_no_shapely

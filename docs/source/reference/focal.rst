@@ -12,8 +12,9 @@ Focal
 
 .. note::
 
-   ``mean`` and ``focal_stats`` output **float32**; ``hotspots`` outputs
-   **int8** confidence bands. Both ``mean`` and ``hotspots`` exclude NaN
+   ``mean`` and ``focal_stats`` keep a float input's dtype and promote
+   integers to float32 (bool, 8/16-bit) or float64 (32/64-bit);
+   ``hotspots`` outputs **int8** confidence bands. Both ``mean`` and ``hotspots`` exclude NaN
    neighbours from their neighbourhood computation.
 
 Apply

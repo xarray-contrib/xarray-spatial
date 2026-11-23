@@ -186,7 +186,6 @@ this section is the brief.
   sentinel passes through and downstream callers can branch on the exact
   value; pass ``masked=True`` to get NaN-masked output.
   ``xrspatial/geotiff/tests/write/test_nodata.py`` pins this split.
-  (``mask_nodata`` is a deprecated alias of ``masked``.)
 * NaN nodata. A file that declares ``nodata=NaN`` is read with NaN in
   both ``attrs['nodata']`` and pixel data (NaN propagates either way).
 * ``attrs['masked_nodata']``. Every read sets a boolean lifecycle

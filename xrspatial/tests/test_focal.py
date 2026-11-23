@@ -10,8 +10,8 @@ import pytest
 import xarray as xr
 
 from xrspatial import mean
-from xrspatial.convolution import (annulus_kernel, calc_cellsize, circle_kernel, convolution_2d,
-                                   convolve_2d, custom_kernel)
+from xrspatial.convolution import (_promote_float, annulus_kernel, calc_cellsize, circle_kernel,
+                                   convolution_2d, convolve_2d, custom_kernel)
 from xrspatial.focal import apply, focal_stats, hotspots
 from xrspatial.tests.general_checks import (assert_boundary_mode_correctness,
                                             create_test_raster,
@@ -956,7 +956,8 @@ def test_apply_keeps_float32(backend):
 # and to float32 on cupy/dask+cupy, so the output dtype depended on the
 # backend and float64 rasters lost precision on GPU. It now follows the same
 # _promote_float contract as apply()/focal_stats() (#2769) and convolve_2d()
-# (#1096): float dtypes are preserved, ints promote to float32.
+# (#1096): float dtypes are preserved, narrow ints promote to float32 and
+# wide ints to float64 (#3684).
 
 
 @pytest.mark.parametrize("backend", ['numpy', 'cupy', 'dask+numpy', 'dask+cupy'])
@@ -988,15 +989,50 @@ def test_mean_keeps_float32_3214(backend):
 
 
 @pytest.mark.parametrize("backend", ['numpy', 'cupy'])
-def test_mean_int_promotes_to_float32_3214(backend):
+@pytest.mark.parametrize("dtype, expected", [
+    (np.uint8, np.float32),
+    (np.int16, np.float32),
+    (np.int32, np.float64),
+    (np.uint32, np.float64),
+    (np.int64, np.float64),
+])
+def test_mean_int_promotion_3214(backend, dtype, expected):
+    # #3214 fixed ints promoting to float32 on every backend; #3684 widened
+    # 32/64-bit ints to float64 because float32 cannot hold them exactly.
     from xrspatial.tests.general_checks import has_cuda_and_cupy
     if 'cupy' in backend and not has_cuda_and_cupy():
         pytest.skip("Requires CUDA and CuPy")
 
-    data = np.arange(20, dtype=np.int32).reshape(4, 5)
+    data = np.arange(20).reshape(4, 5).astype(dtype)
     agg = create_test_raster(data, backend=backend)
     result = mean(agg)
-    assert _compute_dtype(result) == np.float32
+    assert _compute_dtype(result) == expected
+
+
+@pytest.mark.parametrize("backend", ['numpy', 'cupy', 'dask+numpy', 'dask+cupy'])
+@pytest.mark.parametrize("dtype", [np.int32, np.int64])
+def test_mean_wide_int_exact_above_2_24_3684(backend, dtype):
+    # Regression for #3684: int32/int64 rasters with values above 2**24
+    # were cast to float32 before the kernel ran, so the unit steps between
+    # neighbours vanished and mean() returned the (rounded) base value.
+    from xrspatial.tests.general_checks import has_cuda_and_cupy
+    if 'cupy' in backend and not has_cuda_and_cupy():
+        pytest.skip("Requires CUDA and CuPy")
+
+    base = 100_000_000
+    data = (np.arange(30).reshape(5, 6) % 6 + base).astype(dtype)
+    # chunks only applies to the dask backends; (2, 3) splits the 5x6 raster
+    agg = create_test_raster(data, backend=backend, chunks=(2, 3))
+    result = mean(agg)
+    expected = mean(create_test_raster(data.astype(np.float64)))
+    out = result.data
+    if hasattr(out, 'compute'):
+        out = out.compute()
+    if hasattr(out, 'get'):
+        out = out.get()
+    assert out.dtype == np.float64
+    np.testing.assert_array_equal(out, expected.data)
+    assert out[2, 2] == base + 2
 
 
 @cuda_and_cupy_available
@@ -2270,7 +2306,7 @@ def test_mean_dtype_consistent_across_backends_3217(backend, in_dtype):
     result = mean(agg)
     # mean() promotes via _promote_float before dispatch (#3214); every
     # backend must keep that dtype, lazily and computed.
-    expected = np.float64 if in_dtype == np.float64 else np.float32
+    expected = _promote_float(in_dtype)
     assert result.dtype == expected
     assert _computed_dtype(result) == expected
 
@@ -2303,7 +2339,7 @@ def test_apply_dask_advertised_dtype_matches_computed_3217(backend, in_dtype):
         result = apply(agg, kernel, func=_focal_mean_cuda)
     else:
         result = apply(agg, kernel)
-    expected = np.float64 if in_dtype == np.float64 else np.float32
+    expected = _promote_float(in_dtype)
     assert result.dtype == expected
     assert _computed_dtype(result) == expected
 
@@ -2321,7 +2357,7 @@ def test_focal_stats_dask_advertised_dtype_matches_computed_3217(backend, in_dty
     kernel = custom_kernel(np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]]))
     agg = create_test_raster(data, backend=backend, chunks=(2, 2))
     result = focal_stats(agg, kernel, stats_funcs=['mean', 'std'])
-    expected = np.float64 if in_dtype == np.float64 else np.float32
+    expected = _promote_float(in_dtype)
     assert result.dtype == expected
     assert _computed_dtype(result) == expected
 

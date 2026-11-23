@@ -26,9 +26,10 @@ deprecation window. You can rely on these in production.
 
 ### advanced
 
-An `advanced` feature works and is tested, but its surface may change before a
-1.0 release. Behaviour is documented and exercised by tests, but the contract is
-narrower than `stable`. Edge cases on rare codecs, transport quirks on HTTP, and
+An `advanced` feature works and is tested, and its function signature is
+covered by the 1.x LTS promise, but the behavioural contract is narrower than
+`stable` and edge-case behaviour may change in a minor release. Behaviour is
+documented and exercised by tests. Edge cases on rare codecs, transport quirks on HTTP, and
 metadata interop with the wider GDAL ecosystem are not all pinned down. Use
 these in production with the expectation that you may need to follow a
 release-note migration.

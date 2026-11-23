@@ -54,32 +54,20 @@ from .._helpers.markers import requires_gpu
 
 
 def test_write_vrt_signature_exposes_documented_kwargs():
-    """``inspect.signature(_build_vrt)`` reports the four accepted kwargs.
+    """``inspect.signature(_build_vrt)`` reports the documented kwargs.
 
     When the public wrapper used ``**kwargs``, ``inspect.signature``
-    only saw ``vrt_path`` and ``source_files``. ``crs`` was added for
-    parity with ``to_geotiff`` / ``_write_geotiff_gpu`` while keeping the
-    historic ``crs_wkt`` as a deprecated alias (sentinel default so the
-    deprecation shim can tell "user passed nothing" from "user passed
-    crs_wkt=None").
+    only saw the two positional arguments.
     """
     sig = inspect.signature(_build_vrt)
     params = sig.parameters
     assert 'relative' in params
     assert 'crs' in params  # canonical kwarg
-    assert 'crs_wkt' in params  # deprecated alias
     assert 'nodata' in params
     assert params['relative'].default is True
     # ``crs`` is the new canonical kwarg; default None means "pick from
     # the first source", matching to_geotiff / _write_geotiff_gpu.
     assert params['crs'].default is None
-    # ``crs_wkt`` carries a sentinel default so the deprecation shim
-    # can distinguish "user passed nothing" (no warning) from "user
-    # passed crs_wkt=None" (deprecated-but-explicit, warn). The
-    # sentinel itself is private; check that it is NOT None so a
-    # future maintainer cannot accidentally drop the sentinel logic.
-    assert params['crs_wkt'].default is not None
-    assert params['crs_wkt'].default is not inspect.Parameter.empty
     assert params['nodata'].default is None
     # No catch-all VAR_KEYWORD
     kinds = {p.kind for p in params.values()}
@@ -106,8 +94,7 @@ def test_write_vrt_unknown_kwarg_rejected_at_public_level(tmp_path):
 def test_write_vrt_accepts_documented_kwargs(tmp_path):
     """Each documented kwarg round-trips through the explicit signature.
 
-    Uses the canonical ``crs=None`` kwarg form. The deprecated
-    ``crs_wkt`` alias is exercised separately.
+    Uses the canonical ``crs=None`` kwarg form.
     """
     arr = np.zeros((8, 8), dtype=np.float32)
     da = xr.DataArray(

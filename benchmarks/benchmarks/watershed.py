@@ -1,4 +1,4 @@
-from xrspatial import flow_direction, watershed, basins
+from xrspatial import flow_direction, watershed, basin
 
 from .common import get_xr_dataarray
 
@@ -59,6 +59,6 @@ class Basins:
             )
 
     def time_basins(self, nx, type):
-        result = basins(self.flow_dir)
+        result = basin(self.flow_dir)
         if hasattr(result.data, 'compute'):
             result.data.compute()

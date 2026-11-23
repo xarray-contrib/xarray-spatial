@@ -37,7 +37,7 @@ def test_unpack_doc_does_not_claim_noop_3263():
     # Scope to the ``unpack`` paragraph so an unrelated parameter
     # documenting a legitimate no-op case cannot fail this pin.
     start = doc.index("unpack : bool")
-    end = doc.index("mask_and_scale : bool", start)
+    end = doc.index("parse_coordinates : bool", start)
     unpack_doc = doc[start:end]
     assert "is a no-op" not in unpack_doc
     # The corrected wording names what actually happens.

@@ -1031,7 +1031,7 @@ def test_rgb_jpeg_gpu_no_crash_1549(tmp_path, monkeypatch):
     path = str(tmp_path / "rgb_jpeg_1549.tif")
     _write_jpeg_rgb_tiff_1549(path)
 
-    arr = _read_geotiff_gpu(path, gpu='strict', allow_internal_only_jpeg=True)
+    arr = _read_geotiff_gpu(path, on_gpu_failure='strict', allow_internal_only_jpeg=True)
     assert isinstance(arr.data, cupy.ndarray)
     decoded = arr.data.get()
     assert decoded.shape == (256, 256, 3)
@@ -1175,7 +1175,7 @@ def _read_cpu_gpu_lerc(path):
     # The backend default is unmasked (#2976); request masking so the
     # GPU read promotes the sentinel to NaN to match the CPU mask.
     gpu_da = _read_geotiff_gpu(
-        path, gpu='strict', allow_experimental_codecs=True,
+        path, on_gpu_failure='strict', allow_experimental_codecs=True,
         mask_nodata=True,
     )
     gpu_host = gpu_da.data.get()
