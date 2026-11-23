@@ -7,6 +7,7 @@ Reference
 .. toctree::
    :maxdepth: 2
 
+   accessor
    dask_laziness
    classification
    dasymetric
