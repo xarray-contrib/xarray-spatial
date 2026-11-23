@@ -101,9 +101,10 @@ def _check_kernel_vs_raster_memory(kernel, rows, cols, func_name, chunks=None,
 
     ``itemsize`` is the byte width of the dtype the focal internals
     compute in.  Since #2805 ``apply`` and ``focal_stats`` preserve
-    float64 input (``_promote_float``), so callers must pass 8 for
-    float64 rasters; ``hotspots`` always computes in float32 and uses
-    the default of 4 (issue #3223).
+    float64 input, and since #3684 32/64-bit integer input is widened to
+    float64 too (``_promote_float``), so callers must pass 8 for those
+    rasters; ``hotspots`` always computes in float32 and uses the
+    default of 4 (issue #3223).
     """
     krows, kcols = kernel.shape
     pad_h = krows // 2
@@ -372,7 +373,8 @@ def mean(agg, passes=1, excludes=None, name='mean', boundary='nan'):
         for each data variable.
         2D aggregate array of filtered values.
         The input float dtype is preserved (float64 in, float64 out);
-        integer inputs are promoted to float32, matching ``apply`` and
+        bool and 8/16-bit integer inputs are promoted to float32 and
+        32/64-bit integers to float64, matching ``apply`` and
         ``focal_stats``.
 
     Examples
@@ -466,8 +468,9 @@ def mean(agg, passes=1, excludes=None, name='mean', boundary='nan'):
                          coords=agg.coords,
                          attrs=agg.attrs)
 
-    # Preserve the input float dtype, promoting ints to float32 -- the same
-    # contract as apply() / focal_stats() (#2769) and convolve_2d() (#1096).
+    # Preserve the input float dtype, promoting narrow ints to float32 and
+    # wide ints to float64 (#3684) -- the same contract as apply() /
+    # focal_stats() (#2769) and convolve_2d() (#1096).
     # Cast excludes to the working dtype so value matching behaves the same
     # on every backend (issue #3214).
     fdtype = _promote_float(agg.data.dtype)
@@ -780,7 +783,8 @@ def apply(agg=None, kernel=None, func=None, name='focal_apply',
 
     rows, cols = agg.shape[-2], agg.shape[-1]
     # Budget for the dtype the internals will actually compute in:
-    # 8 bytes/cell for float64 input, 4 otherwise (issue #3223).
+    # 8 bytes/cell for float64 and 32/64-bit int input, 4 otherwise
+    # (issues #3223, #3684).
     itemsize = np.dtype(_promote_float(agg.dtype)).itemsize
     _check_kernel_vs_raster_memory(kernel, rows, cols, func_name='apply',
                                    chunks=getattr(agg.data, 'chunks', None),
@@ -1433,7 +1437,8 @@ def focal_stats(agg,
 
     rows, cols = agg.shape[-2], agg.shape[-1]
     # Budget for the dtype the internals will actually compute in:
-    # 8 bytes/cell for float64 input, 4 otherwise (issue #3223).
+    # 8 bytes/cell for float64 and 32/64-bit int input, 4 otherwise
+    # (issues #3223, #3684).
     itemsize = np.dtype(_promote_float(agg.dtype)).itemsize
     _check_kernel_vs_raster_memory(kernel, rows, cols, func_name='focal_stats',
                                    chunks=getattr(agg.data, 'chunks', None),

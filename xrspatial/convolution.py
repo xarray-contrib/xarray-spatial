@@ -19,9 +19,19 @@ except ImportError:
 
 
 def _promote_float(dtype):
-    """Return at least float32; preserve float64."""
-    if np.issubdtype(dtype, np.floating):
+    """Return a float dtype that represents ``dtype`` values exactly.
+
+    Float inputs keep their dtype. 32- and 64-bit integers go to float64
+    (exact for int32/uint32, and up to 2**53 for int64/uint64); bool and
+    8/16-bit integers go to float32, which holds them exactly. float32
+    cannot separate integers above 2**24, so casting wide ints to it
+    silently corrupted large-valued rasters (#3684).
+    """
+    dtype = np.dtype(dtype)
+    if dtype.kind == 'f':
         return dtype
+    if dtype.kind in 'iu' and dtype.itemsize > 2:
+        return np.float64
     return np.float32
 
 
@@ -563,8 +573,8 @@ def convolve_2d(data, kernel, boundary='nan'):
     Parameters
     ----------
     data : numpy.ndarray, cupy.ndarray, or dask.array.Array
-        2D array of values to convolve. Integer inputs are promoted to at
-        least float32.
+        2D array of values to convolve. Bool and 8/16-bit integer inputs
+        are promoted to float32, 32/64-bit integers to float64 (#3684).
     kernel : numpy.ndarray
         Impulse kernel with an odd number of rows and columns.
     boundary : str, default='nan'
@@ -665,7 +675,7 @@ def convolution_2d(agg, kernel, name='convolution_2d', boundary='nan'):
         array([[nan, nan, nan, nan, nan, nan],
                [nan, 35., 40., 45., 50., nan],
                [nan, 65., 70., 75., 80., nan],
-               [nan, nan, nan, nan, nan, nan]], dtype=float32)
+               [nan, nan, nan, nan, nan, nan]])
         Dimensions without coordinates: dim_0, dim_1
 
     convolution_2d() works with Dask with NumPy backed DataArray.
@@ -723,7 +733,7 @@ def convolution_2d(agg, kernel, name='convolution_2d', boundary='nan'):
         array([[ nan,  nan,  nan,  nan,  nan,  nan],
                [ nan,  50.,  58.,  66.,  74.,  nan],
                [ nan,  98., 106., 114., 122.,  nan],
-               [ nan,  nan,  nan,  nan,  nan,  nan]], dtype=float32)
+               [ nan,  nan,  nan,  nan,  nan,  nan]])
         Dimensions without coordinates: dim_0, dim_1
     """
 
