@@ -1316,7 +1316,7 @@ def test_release_gate_codec_round_trip(
     source = _round_trip_make_input(dtype_name)
     is_float = np.issubdtype(np.dtype(dtype_name), np.floating)
 
-    mask_kwargs: dict = {} if is_float else {"mask_nodata": False}
+    mask_kwargs: dict = {} if is_float else {"masked": False}
 
     pass_one_kwargs: dict = (
         {} if is_float else {"nodata": source.attrs["nodata"]}

@@ -11,7 +11,7 @@ Covers the write / validation nodata paths:
   round-trips.
 * an out-of-range integer sentinel (e.g. uint16 + ``-9999``) is a
   value-match no-op rather than an ``OverflowError``.
-* ``mask_nodata=False`` keeps the source integer dtype so the
+* ``masked=False`` keeps the source integer dtype so the
   ``dtype=`` cast contract is reachable.
 
 GPU-only nodata cases live with the GPU tests; the GPU parity tests
@@ -606,7 +606,7 @@ def test_apply_nodata_mask_gpu_out_of_range_no_crash():
 
 
 # ===========================================================================
-# ``mask_nodata=False`` keeps the source integer dtype
+# ``masked=False`` keeps the source integer dtype
 # ===========================================================================
 
 
@@ -647,7 +647,7 @@ def test_regression_dtype_uint16_was_unreachable(
     """Without the kwarg, ``dtype="uint16"`` raises on a matching sentinel.
 
     Baseline that documents the broken contract: this is the original
-    failure mode reported in the issue. The ``mask_nodata=False``
+    failure mode reported in the issue. The ``masked=False``
     branch below is the fix.
     """
     path, _ = uint16_with_matching_sentinel
@@ -656,9 +656,9 @@ def test_regression_dtype_uint16_was_unreachable(
 
 
 def test_mask_nodata_false_preserves_uint16(uint16_with_matching_sentinel):
-    """``mask_nodata=False`` keeps the uint16 source dtype."""
+    """``masked=False`` keeps the uint16 source dtype."""
     path, arr = uint16_with_matching_sentinel
-    da = open_geotiff(path, dtype='uint16', mask_nodata=False)
+    da = open_geotiff(path, dtype='uint16', masked=False)
     assert da.dtype == np.uint16
     # Raw sentinels survive in the data.
     np.testing.assert_array_equal(da.values, arr)
@@ -669,7 +669,7 @@ def test_mask_nodata_false_preserves_uint16(uint16_with_matching_sentinel):
 def test_mask_nodata_false_no_dtype_kwarg(uint16_with_matching_sentinel):
     """Without ``dtype=``, the source dtype is preserved as-is."""
     path, arr = uint16_with_matching_sentinel
-    da = open_geotiff(path, mask_nodata=False)
+    da = open_geotiff(path, masked=False)
     assert da.dtype == np.uint16
     np.testing.assert_array_equal(da.values, arr)
     assert da.attrs['nodata'] == 0
@@ -705,7 +705,7 @@ def test_no_match_both_modes_agree(uint16_no_match):
     """
     path, arr = uint16_no_match
     masked = open_geotiff(path)
-    unmasked = open_geotiff(path, mask_nodata=False)
+    unmasked = open_geotiff(path, masked=False)
     assert masked.dtype == np.uint16
     assert unmasked.dtype == np.uint16
     np.testing.assert_array_equal(masked.values, arr)
@@ -713,13 +713,13 @@ def test_no_match_both_modes_agree(uint16_no_match):
 
 
 def test_float_file_mask_nodata_false_keeps_data(float32_tiff):
-    """For a float32 file with NaN nodata, ``mask_nodata=False`` is a
+    """For a float32 file with NaN nodata, ``masked=False`` is a
     no-op: the sentinel is NaN so the inline mask would do nothing
     anyway, and the float dtype is preserved either way.
     """
     path, arr = float32_tiff
     masked = open_geotiff(path)
-    unmasked = open_geotiff(path, mask_nodata=False)
+    unmasked = open_geotiff(path, masked=False)
     assert masked.dtype == np.float32
     assert unmasked.dtype == np.float32
     np.testing.assert_array_equal(np.isnan(masked.values),
@@ -731,7 +731,7 @@ def test_float_file_mask_nodata_false_keeps_data(float32_tiff):
 def test_dtype_cast_preservation_uint8(tmp_path):
     """Casting to a different integer dtype also works with the opt-out.
 
-    The reader keeps the source dtype (uint16) via ``mask_nodata=False``,
+    The reader keeps the source dtype (uint16) via ``masked=False``,
     then ``dtype="uint32"`` casts integer-to-integer, which is allowed.
     """
     arr = np.array([[0, 100, 200],
@@ -739,7 +739,7 @@ def test_dtype_cast_preservation_uint8(tmp_path):
     path = str(tmp_path / 'uint16_to_uint32_2052.tif')
     write(arr, path, nodata=0, compression='none', tiled=False)
 
-    da = open_geotiff(path, dtype='uint32', mask_nodata=False)
+    da = open_geotiff(path, dtype='uint32', masked=False)
     assert da.dtype == np.uint32
     np.testing.assert_array_equal(da.values, arr.astype(np.uint32))
 
@@ -751,7 +751,7 @@ def test_dask_path_mask_nodata_false(uint16_with_matching_sentinel):
     graph dtype to float64 and force the per-chunk cast.
     """
     path, arr = uint16_with_matching_sentinel
-    da = open_geotiff(path, chunks=2, mask_nodata=False)
+    da = open_geotiff(path, chunks=2, masked=False)
     assert da.dtype == np.uint16
     computed = da.compute()
     assert computed.dtype == np.uint16
@@ -782,8 +782,8 @@ def test_dask_path_default_still_promotes(uint16_with_matching_sentinel):
 
 
 def test_dask_dtype_cast_with_opt_out(uint16_with_matching_sentinel):
-    """``dtype="uint16"`` + ``mask_nodata=False`` works on the dask path."""
+    """``dtype="uint16"`` + ``masked=False`` works on the dask path."""
     path, arr = uint16_with_matching_sentinel
-    da = open_geotiff(path, chunks=2, dtype='uint16', mask_nodata=False)
+    da = open_geotiff(path, chunks=2, dtype='uint16', masked=False)
     assert da.dtype == np.uint16
     np.testing.assert_array_equal(da.compute().values, arr)

@@ -132,7 +132,7 @@ class TestPublicAPI:
         path = str(tmp_path / 'test.tif')
         write(arr, path, compression='none', tiled=False)
 
-        da = open_geotiff(path, name='custom')
+        da = open_geotiff(path, default_name='custom')
         assert da.name == 'custom'
 
     def test_write_numpy_array(self, tmp_path):

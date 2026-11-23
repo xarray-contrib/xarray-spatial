@@ -93,8 +93,8 @@ class GeoTIFFBackendEntrypoint(BackendEntrypoint):
     # xarray's signature introspection (``detect_parameters``) raises on an
     # ``open_dataset`` that uses ``**kwargs`` without this attribute set. It
     # also stops xarray from injecting its CF decoders -- in particular
-    # ``mask_and_scale``, which would collide with open_geotiff's deprecated
-    # alias of the same name. GeoTIFF read options come in through
+    # ``mask_and_scale``, which open_geotiff does not accept (its
+    # equivalent is ``unpack``). GeoTIFF read options come in through
     # ``backend_kwargs`` instead.
     open_dataset_parameters = ("filename_or_obj", "drop_variables")
 

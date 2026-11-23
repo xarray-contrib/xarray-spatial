@@ -79,10 +79,8 @@ from ._geotags import RASTER_PIXEL_IS_AREA, RASTER_PIXEL_IS_POINT, GeoTransform 
 from ._reader import (_MAX_CLOUD_BYTES_SENTINEL, CloudSizeLimitError, PixelSafetyLimitError,
                       UnsafeURLError)
 from ._reader import read_to_array as _read_to_array
-from ._runtime import (_CRS_WKT_DEPRECATED_SENTINEL, _GPU_DEPRECATED_SENTINEL,  # noqa: F401
-                       _MASK_AND_SCALE_DEPRECATED_SENTINEL, _MASK_NODATA_DEPRECATED_SENTINEL,
-                       _MISSING_SOURCES_SENTINEL, _NAME_DEPRECATED_SENTINEL,
-                       _ON_GPU_FAILURE_SENTINEL, GeoTIFFFallbackWarning, _geotiff_strict_mode,
+from ._runtime import (_MISSING_SOURCES_SENTINEL, _ON_GPU_FAILURE_SENTINEL,  # noqa: F401
+                       GeoTIFFFallbackWarning, _geotiff_strict_mode,
                        _gpu_fallback_warning_message)
 from ._validation import (_validate_3d_writer_dims, _validate_chunks_arg,  # noqa: F401
                           _validate_tile_size_arg)
@@ -103,9 +101,7 @@ from ._writers.gpu import _write_geotiff_gpu  # noqa: F401
 # callers can import ``xrspatial.geotiff._build_vrt``. Not public API.
 from ._writers.vrt import _build_vrt  # noqa: F401
 
-# All names below are part of the supported public API. ``plot_geotiff``
-# is intentionally omitted: it is deprecated in favour of ``da.xrs.plot()``
-# and emits a ``DeprecationWarning`` when called.
+# All names below are part of the supported public API.
 __all__ = [
     'CloudSizeLimitError',
     'ConflictingCRSError',
@@ -499,7 +495,6 @@ def open_geotiff(source: str | BinaryIO, *,
                  overview_level: int | None = None,
                  band: int | None = None,
                  default_name: str | None = None,
-                 name: str | None = _NAME_DEPRECATED_SENTINEL,  # type: ignore[assignment]
                  chunks: int | tuple | None = None,
                  gpu: bool = False,
                  max_pixels: int | None = None,
@@ -515,10 +510,7 @@ def open_geotiff(source: str | BinaryIO, *,
                  allow_internal_only_jpeg: bool = False,
                  band_nodata: str | None = None,
                  masked: bool = False,
-                 mask_nodata: bool = _MASK_NODATA_DEPRECATED_SENTINEL,  # type: ignore[assignment]
                  unpack: bool = False,
-                 mask_and_scale: bool = (
-                     _MASK_AND_SCALE_DEPRECATED_SENTINEL),  # type: ignore[assignment]
                  parse_coordinates: bool = True,
                  lock: object | None = None,
                  cache: bool = True,
@@ -560,7 +552,7 @@ def open_geotiff(source: str | BinaryIO, *,
     ``lock``, ``cache``) so callers can move between the two with minimal
     edits. ``masked`` defaults to ``False`` (no sentinel-to-NaN promotion),
     matching ``open_rasterio``. The scale/offset option is named ``unpack``
-    here; rioxarray's ``mask_and_scale`` is kept as a deprecated alias.
+    here (rioxarray calls it ``mask_and_scale``).
 
     Automatically dispatches to the best backend:
     - ``gpu=True``: GPU-accelerated read via nvCOMP (returns CuPy)
@@ -621,10 +613,6 @@ def open_geotiff(source: str | BinaryIO, *,
     default_name : str or None
         [stable] Name for the DataArray. None derives it from the source
         file name. Matches rioxarray's ``open_rasterio`` parameter.
-    name : str or None
-        [deprecated] Deprecated alias of ``default_name``; emits a
-        ``DeprecationWarning``. Passing both ``default_name`` and ``name``
-        raises ``TypeError``.
     chunks : int, tuple, or None
         [stable] Chunk size for Dask lazy reading. Dask reads are
         gated against the eager reader by the cross-backend parity
@@ -702,18 +690,13 @@ def open_geotiff(source: str | BinaryIO, *,
         step and keep the source dtype. ``attrs['nodata']`` still
         carries the raw sentinel either way, so downstream code can mask
         explicitly. The default matches rioxarray's ``open_rasterio``
-        (``masked=False``); note that earlier xrspatial releases masked
-        by default (``mask_nodata=True``), so a bare ``open_geotiff(path)``
-        no longer promotes the sentinel to NaN. Pass ``masked=True`` and
+        (``masked=False``); note that 0.x releases masked by default, so
+        a bare ``open_geotiff(path)`` no longer promotes the sentinel to
+        NaN. Pass ``masked=True`` and
         ``dtype=<integer>`` together on a source with a maskable sentinel
         and the read raises ``ValueError``, because the unconditional
         float64 promotion (issue #2990) makes the integer cast lossy
         whether or not a sentinel pixel is present.
-    mask_nodata : bool
-        [deprecated] Deprecated alias of ``masked``; emits a
-        ``DeprecationWarning``. Passing both ``masked`` and ``mask_nodata``
-        raises ``TypeError``. Note the default also changed from
-        ``mask_nodata=True`` to ``masked=False``.
     unpack : bool, default False
         [experimental] If True, read the source's GDAL ``SCALE`` / ``OFFSET``
         metadata and return ``data * scale + offset``, masking the nodata
@@ -746,10 +729,6 @@ def open_geotiff(source: str | BinaryIO, *,
         ``unpack=True`` applies the scale a second time. Drop those
         tags (and ``attrs['scale_factor']`` / ``attrs['add_offset']``) before
         writing if you need a clean round-trip.
-    mask_and_scale : bool
-        [deprecated] Deprecated alias of ``unpack``; emits a
-        ``DeprecationWarning``. Named after rioxarray's ``open_rasterio``.
-        Passing both ``unpack`` and ``mask_and_scale`` raises ``TypeError``.
     parse_coordinates : bool, default True
         [stable] If True (the default), build ``x`` / ``y`` coordinate
         arrays from the transform. If False, skip them and return a
@@ -933,57 +912,6 @@ def open_geotiff(source: str | BinaryIO, *,
             from ._pam import read_pam_sidecar
             da.attrs.update(read_pam_sidecar(source))
         return da
-
-    # Resolve the rioxarray-compatible renames. ``masked`` / ``default_name``
-    # are the canonical names; ``mask_nodata`` / ``name`` are deprecated
-    # aliases kept for back-compat. Mirrors the sentinel-based deprecation in
-    # ``read_geotiff_gpu`` (gpu -> on_gpu_failure): passing both the old and
-    # new name is ambiguous and raises, passing the old name alone warns.
-    if mask_nodata is not _MASK_NODATA_DEPRECATED_SENTINEL:
-        # ``masked`` carries a real default of False, so an explicit
-        # ``masked=False`` cannot be told apart from the default here; that
-        # one combination (``masked=False`` + ``mask_nodata=True``) does not
-        # raise and resolves to the ``mask_nodata`` value. This matches the
-        # documented stance on ``read_geotiff_gpu``'s gpu/on_gpu_failure pair.
-        if masked is not False:
-            raise TypeError(
-                "open_geotiff: pass either 'masked' or the deprecated "
-                "'mask_nodata' alias, not both.")
-        warnings.warn(
-            "open_geotiff(..., mask_nodata=...) is deprecated; use "
-            "masked=... instead. Note the default also changed from "
-            "mask_nodata=True to masked=False to match rioxarray's "
-            "open_rasterio: a bare open_geotiff(path) no longer promotes "
-            "the nodata sentinel to NaN.",
-            DeprecationWarning, stacklevel=2)
-        masked = mask_nodata
-    if name is not _NAME_DEPRECATED_SENTINEL:
-        if default_name is not None:
-            raise TypeError(
-                "open_geotiff: pass either 'default_name' or the deprecated "
-                "'name' alias, not both.")
-        warnings.warn(
-            "open_geotiff(..., name=...) is deprecated; use default_name=... "
-            "instead to match rioxarray's open_rasterio.",
-            DeprecationWarning, stacklevel=2)
-        default_name = name
-    if mask_and_scale is not _MASK_AND_SCALE_DEPRECATED_SENTINEL:
-        # ``unpack`` is the canonical name; ``mask_and_scale`` is the
-        # deprecated rioxarray-compatible alias. ``unpack`` carries a real
-        # default of False, so an explicit ``unpack=False`` cannot be told
-        # apart from the default; that one combination resolves to the
-        # ``mask_and_scale`` value, matching the ``masked`` / ``mask_nodata``
-        # stance above.
-        if unpack is not False:
-            raise TypeError(
-                "open_geotiff: pass either 'unpack' or the deprecated "
-                "'mask_and_scale' alias, not both.")
-        warnings.warn(
-            "open_geotiff(..., mask_and_scale=...) is deprecated; use "
-            "unpack=... instead. The behaviour is unchanged: it applies the "
-            "source's GDAL SCALE / OFFSET and masks the nodata sentinel.",
-            DeprecationWarning, stacklevel=2)
-        unpack = mask_and_scale
 
     # ``lock`` / ``cache`` are accepted for open_rasterio signature
     # compatibility. xrspatial's dask reader re-opens the source per window,
@@ -1254,20 +1182,3 @@ def open_geotiff(source: str | BinaryIO, *,
         parse_coordinates=parse_coordinates,
         band=band,
     ))
-
-
-def plot_geotiff(da: xr.DataArray, **kwargs):
-    """Plot a DataArray using its embedded colormap if present.
-
-    .. deprecated:: 0.10.0
-        Use ``da.xrs.plot()`` instead. ``plot_geotiff`` is a thin wrapper
-        kept for backward compatibility and will be removed in a future
-        release.
-    """
-    warnings.warn(
-        "plot_geotiff is deprecated and will be removed in a future "
-        "release. Use ``da.xrs.plot()`` instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return da.xrs.plot(**kwargs)
