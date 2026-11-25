@@ -2348,7 +2348,7 @@ def regions(
 
     References
     ----------
-        - Tomislav Hengl: http://spatial-analyst.net/ILWIS/htm/ilwisapp/areanumbering_algorithm.htm # noqa
+        - Tomislav Hengl: https://web.archive.org/web/20161114114215/http://spatial-analyst.net/ILWIS/htm/ilwisapp/areanumbering_algorithm.htm # noqa
 
     Examples
     --------

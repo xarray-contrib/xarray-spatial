@@ -224,3 +224,16 @@ plot_html_show_source_link = False
 
 # nbsphinx configuration
 nbsphinx_allow_errors = True
+
+# linkcheck configuration
+linkcheck_ignore = [
+    # index.rst image targets are relative links to built HTML pages.
+    # linkcheck resolves them against the source tree, where only the
+    # .ipynb exists, and reports every one as broken.
+    r'^user_guide/.+\.html',
+    # These sites answer 403 to automated clients; the links work in a
+    # browser.
+    r'https://medium\.com/',
+    r'https://stackoverflow\.com/',
+    r'https://www\.sciencedirect\.com/',
+]
