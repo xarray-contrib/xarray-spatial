@@ -96,7 +96,7 @@ xarray-spatial does not depend on GDAL / GEOS, which makes it fully extensible i
       :target: user_guide/surface.html#Slope
    ---
    .. image:: _static/img/4-4.png
-      :target: https://github.com/xarray-contrib/xarray-spatial/blob/main/examples/pharmacy-deserts.ipynb#Create-a-%22Distance-to-Nearest-Pharmacy%22-Layer-&-Classify-into-5-Groups
+      :target: https://github.com/xarray-contrib/xarray-spatial/blob/main/examples/pharmacy-deserts.ipynb
 
 .. toctree::
    :maxdepth: 1

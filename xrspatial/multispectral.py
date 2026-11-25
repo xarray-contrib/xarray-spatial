@@ -194,7 +194,7 @@ def arvi(nir_agg: xr.DataArray,
 
     References
     ----------
-        - MODIS: https://modis.gsfc.nasa.gov/sci_team/pubs/abstract_new.php?id=03667 # noqa
+        - IEEE: https://doi.org/10.1109/36.134076 # noqa
         - Kaufman, Y. J. and Tanre, D. (1992). Atmospherically resistant
           vegetation index (ARVI) for EOS-MODIS. IEEE Transactions on
           Geoscience and Remote Sensing, 30(2), 261-270.

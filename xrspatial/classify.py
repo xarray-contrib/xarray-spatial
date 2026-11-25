@@ -328,7 +328,7 @@ def reclassify(agg: xr.DataArray,
 
     References
     ----------
-        - PySAL: https://pysal.org/mapclassify/_modules/mapclassify/classifiers.html # noqa
+        - PySAL: https://github.com/pysal/mapclassify/blob/main/mapclassify/classifiers.py # noqa
 
     Examples
     --------
@@ -512,7 +512,7 @@ def quantile(agg: xr.DataArray,
 
     References
     ----------
-        - PySAL: https://pysal.org/mapclassify/_modules/mapclassify/classifiers.html#Quantiles # noqa
+        - PySAL: https://github.com/pysal/mapclassify/blob/main/mapclassify/classifiers.py # noqa
 
     Examples
     --------
@@ -844,7 +844,7 @@ def natural_breaks(agg: xr.DataArray,
 
     References
     ----------
-        - PySAL: https://pysal.org/mapclassify/_modules/mapclassify/classifiers.html#NaturalBreaks # noqa
+        - PySAL: https://github.com/pysal/mapclassify/blob/main/mapclassify/classifiers.py # noqa
         - jenks: https://github.com/perrygeo/jenks/blob/master/jenks.pyx
 
     Examples
@@ -982,7 +982,7 @@ def equal_interval(agg: xr.DataArray,
 
     References
     ----------
-        - PySAL: https://pysal.org/mapclassify/_modules/mapclassify/classifiers.html#EqualInterval # noqa
+        - PySAL: https://github.com/pysal/mapclassify/blob/main/mapclassify/classifiers.py # noqa
         - scikit-learn: https://scikit-learn.org/stable/auto_examples/classification/plot_classifier_comparison.html#sphx-glr-auto-examples-classification-plot-classifier-comparison-py # noqa
 
     Examples
@@ -1083,7 +1083,7 @@ def std_mean(agg: xr.DataArray,
 
     References
     ----------
-        - PySAL: https://pysal.org/mapclassify/_modules/mapclassify/classifiers.html#StdMean
+        - PySAL: https://github.com/pysal/mapclassify/blob/main/mapclassify/classifiers.py
 
     Examples
     --------
@@ -1226,7 +1226,7 @@ def head_tail_breaks(agg: xr.DataArray,
 
     References
     ----------
-        - PySAL: https://pysal.org/mapclassify/_modules/mapclassify/classifiers.html#HeadTailBreaks
+        - PySAL: https://github.com/pysal/mapclassify/blob/main/mapclassify/classifiers.py
 
     Examples
     --------
@@ -1341,7 +1341,7 @@ def percentiles(agg: xr.DataArray,
 
     References
     ----------
-        - PySAL: https://pysal.org/mapclassify/_modules/mapclassify/classifiers.html#Percentiles
+        - PySAL: https://github.com/pysal/mapclassify/blob/main/mapclassify/classifiers.py
 
     Examples
     --------
@@ -1507,7 +1507,7 @@ def maximum_breaks(agg: xr.DataArray,
 
     References
     ----------
-        - PySAL: https://pysal.org/mapclassify/_modules/mapclassify/classifiers.html#MaximumBreaks
+        - PySAL: https://github.com/pysal/mapclassify/blob/main/mapclassify/classifiers.py
 
     Examples
     --------
@@ -1677,7 +1677,7 @@ def box_plot(agg: xr.DataArray,
 
     References
     ----------
-        - PySAL: https://pysal.org/mapclassify/_modules/mapclassify/classifiers.html#BoxPlot
+        - PySAL: https://github.com/pysal/mapclassify/blob/main/mapclassify/classifiers.py
 
     Examples
     --------

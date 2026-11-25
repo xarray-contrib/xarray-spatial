@@ -29,7 +29,7 @@ of the input array: NumPy, Dask, CuPy, and Dask+CuPy. The same
 ``slope(terrain)`` call works on an in-memory array, an out-of-core
 chunked array, or a GPU array. Not every function reaches the same
 maturity on every backend; the feature matrix in the `README
-<https://github.com/xarray-contrib/xarray-spatial#readme>`_ and the
+<https://github.com/xarray-contrib/xarray-spatial>`_ and the
 :doc:`/user_guide/stability_policy` page track the per-function,
 per-backend tiers.
 

@@ -84,7 +84,7 @@ def euclidean_distance(x1: float, x2: float, y1: float, y2: float) -> float:
 
     References
     ----------
-        - Wikipedia: https://en.wikipedia.org/wiki/Euclidean_distance#:~:text=In%20mathematics%2C%20the%20Euclidean%20distance,being%20called%20the%20Pythagorean%20distance. # noqa
+        - Wikipedia: https://en.wikipedia.org/wiki/Euclidean_distance # noqa
 
     Examples
     --------
@@ -188,7 +188,7 @@ def great_circle_distance(
 
     References
     ----------
-        - Wikipedia: https://en.wikipedia.org/wiki/Great-circle_distance#:~:text=The%20great%2Dcircle%20distance%2C%20orthodromic,line%20through%20the%20sphere's%20interior). # noqa
+        - Wikipedia: https://en.wikipedia.org/wiki/Great-circle_distance # noqa
 
     Examples
     --------
@@ -1786,7 +1786,7 @@ def _process(
 
 
 # ported from
-# https://github.com/OSGeo/gdal/blob/master/gdal/alg/gdalproximity.cpp
+# https://github.com/OSGeo/gdal/blob/master/alg/gdalproximity.cpp
 @supports_dataset
 def proximity(
     raster: xr.DataArray,
@@ -1885,7 +1885,7 @@ def proximity(
 
     References
     ----------
-        - OSGeo: https://github.com/OSGeo/gdal/blob/master/gdal/alg/gdalproximity.cpp # noqa
+        - OSGeo: https://github.com/OSGeo/gdal/blob/master/alg/gdalproximity.cpp # noqa
 
     Examples
     --------
@@ -2048,7 +2048,7 @@ def allocation(
 
     References
     ----------
-        - OSGeo: https://github.com/OSGeo/gdal/blob/master/gdal/alg/gdalproximity.cpp # noqa
+        - OSGeo: https://github.com/OSGeo/gdal/blob/master/alg/gdalproximity.cpp # noqa
 
     Examples
     --------
@@ -2214,7 +2214,7 @@ def direction(
 
     References
     ----------
-        - OSGeo: https://github.com/OSGeo/gdal/blob/master/gdal/alg/gdalproximity.cpp # noqa
+        - OSGeo: https://github.com/OSGeo/gdal/blob/master/alg/gdalproximity.cpp # noqa
 
     Examples
     --------
