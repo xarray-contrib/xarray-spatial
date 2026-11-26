@@ -1393,6 +1393,8 @@ def _surface_distance_dask_cupy(source_da, elev_da,
 def _compute(raster, elevation, x, y, target_values, max_distance,
              connectivity, method, mode):
     """Core dispatcher for surface_distance / allocation / direction."""
+    if target_values is None:
+        target_values = []
     _validate_raster(raster, func_name='surface_distance', name='raster')
     _validate_raster(elevation, func_name='surface_distance',
                      name='elevation')
@@ -1563,7 +1565,7 @@ def surface_distance(
     elevation: xr.DataArray,
     x: str = "x",
     y: str = "y",
-    target_values: list = [],
+    target_values: list | None = None,
     max_distance: float = np.inf,
     connectivity: int = 8,
     method: str = 'planar',
@@ -1587,9 +1589,9 @@ def surface_distance(
         Name of the x coordinate.
     y : str, default='y'
         Name of the y coordinate.
-    target_values : list, optional
+    target_values : list, default=None
         Specific pixel values in *raster* to treat as sources.
-        If empty, all non-zero finite pixels are sources.
+        If ``None`` or empty, all non-zero finite pixels are sources.
     max_distance : float, default=np.inf
         Maximum surface distance.  Pixels beyond this budget are NaN.
         A finite value enables efficient Dask parallelisation.
@@ -1619,7 +1621,7 @@ def surface_allocation(
     elevation: xr.DataArray,
     x: str = "x",
     y: str = "y",
-    target_values: list = [],
+    target_values: list | None = None,
     max_distance: float = np.inf,
     connectivity: int = 8,
     method: str = 'planar',
@@ -1656,7 +1658,7 @@ def surface_direction(
     elevation: xr.DataArray,
     x: str = "x",
     y: str = "y",
-    target_values: list = [],
+    target_values: list | None = None,
     max_distance: float = np.inf,
     connectivity: int = 8,
     method: str = 'planar',
